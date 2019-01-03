@@ -45,8 +45,10 @@ namespace wzxv
                             .Select(i => i.s)
                             .FirstOrDefault();
 
-                if (slot != null)
-                    return (slot.Artist, slot.Title);
+                if (slot == null)
+                    slot = _slots.First();
+
+                return (slot.Artist, slot.Title);
             }
 
             return (DefaultArtist, DefaultTitle);

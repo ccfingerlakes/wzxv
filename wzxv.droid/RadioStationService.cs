@@ -21,18 +21,18 @@ using Com.Google.Android.Exoplayer2.Util;
 namespace wzxv
 {
     [Service(Name = "wzxv.app.audio")]
-    [IntentFilter(new [] {  ACTION_PLAY, ACTION_STOP })]
+    [IntentFilter(new [] {  ActionPlay, ActionStop })]
     public class RadioStationService : Service, IPlayerEventListener
     {
-        private const int NOTIFICATION_ID = 1;
-        private const string CHANNEL_ID = "wzxv.app.PLAYBACK";
-        private const string STREAM_URL = "http://ic2.christiannetcast.com/wzxv-fm";
-        private const string SCHEDULE_URL = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
-        private const int SCHEDULE_REFRESH_INTERVAL = 15000;
+        private const int NotificationId = 1;
+        private const string ChannelId = "wzxv.app.PLAYBACK";
+        private const string StreamUrl = "http://ic2.christiannetcast.com/wzxv-fm";
+        private const string ScheduleUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
+        private const int ScheduleRefreshInterval = 15000;
 
-        public const string ACTION_PLAY = "wzxv.app.PLAY";
-        public const string ACTION_STOP = "wzxv.app.STOP";
-        public const string ACTION_TOGGLE = "wzxv.app.TOGGLE";
+        public const string ActionPlay = "wzxv.app.PLAY";
+        public const string ActionStop = "wzxv.app.STOP";
+        public const string ActionToggle = "wzxv.app.TOGGLE";
 
         private SimpleExoPlayer _player;
         private NotificationManager _notificationManager;
@@ -60,21 +60,9 @@ namespace wzxv
             _wifiManager = (WifiManager)GetSystemService(WifiService);
             _notificationManager = (NotificationManager)GetSystemService(NotificationService);
             _powerManager = (PowerManager)GetSystemService(PowerService);
-            _schedule = RadioStationSchedule.LoadFrom(SCHEDULE_URL);
-            _scheduleRefresh = new Timer(SCHEDULE_REFRESH_INTERVAL);
+            _schedule = RadioStationSchedule.LoadFrom(ScheduleUrl);
+            _scheduleRefresh = new Timer(ScheduleRefreshInterval);
             _scheduleRefresh.Elapsed += (_, __) => OnScheduleRefresh();
-        }
-
-        void OnScheduleRefresh()
-        {
-            (var artist, var title) = _schedule.GetCurrent();
-
-            _notificationManager.Notify(NOTIFICATION_ID, CreateNotificationBuilder()
-                                                            .SetContentTitle(title)
-                                                            .SetContentText(artist)
-                                                            .Build());
-
-            Schedule?.Invoke(this, new RadioStationServiceScheduleEventArgs(artist, title));
         }
 
         public override IBinder OnBind(Intent intent)
@@ -85,7 +73,7 @@ namespace wzxv
 
         public override bool OnUnbind(Intent intent)
         {
-            StopNotification();
+            StopNotifications();
             return base.OnUnbind(intent);
         }
 
@@ -108,9 +96,9 @@ namespace wzxv
                 _player.Release();
                 _player = null;
 
-                StopNotification();
+                StopNotifications();
                 StopForeground(true);
-                ReleaseSysLock();
+                ReleaseLocks();
             }
         }
 
@@ -125,7 +113,7 @@ namespace wzxv
                     var notification = CreateNotificationBuilder()
                                         .Build();
 
-                    StartForeground(NOTIFICATION_ID, notification);
+                    StartForeground(NotificationId, notification);
 
                     IsStarted = true;
                 }
@@ -133,13 +121,13 @@ namespace wzxv
 
             switch (intent.Action)
             {
-                case ACTION_PLAY:
-                case ACTION_TOGGLE when !IsPlaying:
+                case ActionPlay:
+                case ActionToggle when !IsPlaying:
                     Play();
                     break;
 
-                case ACTION_STOP:
-                case ACTION_TOGGLE when IsPlaying:
+                case ActionStop:
+                case ActionToggle when IsPlaying:
                     Stop();
                     break;
             }
@@ -149,7 +137,7 @@ namespace wzxv
 
         void RegisterNotificationChannel()
         {
-            var channel = new NotificationChannel(CHANNEL_ID, "Playback", NotificationImportance.Low)
+            var channel = new NotificationChannel(ChannelId, "Playback", NotificationImportance.Low)
             {
                 LockscreenVisibility = NotificationVisibility.Public
             };
@@ -164,7 +152,7 @@ namespace wzxv
             var pendingIntent = PendingIntent.GetActivity(ApplicationContext, 0, new Intent(ApplicationContext, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
             
             var builder = new NotificationCompat.Builder(ApplicationContext)
-                .SetSmallIcon(Resource.Drawable.ic_stat_audio)
+                .SetSmallIcon(Resource.Drawable.headset)
                 .SetContentIntent(pendingIntent)
                 .SetOngoing(true)
                 .SetVisibility(NotificationCompat.VisibilityPublic)
@@ -172,18 +160,18 @@ namespace wzxv
 
             if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
             {
-                builder.SetChannelId(CHANNEL_ID);
+                builder.SetChannelId(ChannelId);
             }
             
             return builder;
         }
 
-        void StopNotification()
+        void StopNotifications()
         {
             _notificationManager.CancelAll();
         }
 
-        void AquireSysLock()
+        void AquireLocks()
         {
             if (_wifiLock == null)
             {
@@ -198,7 +186,7 @@ namespace wzxv
             _powerWakeLock.Acquire();
         }
 
-        void ReleaseSysLock()
+        void ReleaseLocks()
         {
             if (_wifiLock != null)
             {
@@ -237,9 +225,9 @@ namespace wzxv
 
                 if (_audioManager.RequestAudioFocus(audioFocusRequest) == AudioFocusRequest.Granted)
                 {
-                    AquireSysLock();
+                    AquireLocks();
 
-                    var mediaUri = Android.Net.Uri.Parse(STREAM_URL);
+                    var mediaUri = Android.Net.Uri.Parse(StreamUrl);
                     var userAgent = Util.GetUserAgent(this, "wzxv.app");
                     var defaultHttpDataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
                     var defaultDataSourceFactory = new DefaultDataSourceFactory(this, null, defaultHttpDataSourceFactory);
@@ -260,30 +248,42 @@ namespace wzxv
             {
                 _scheduleRefresh.Stop();
                 _player.Stop();
-                StopNotification();
+                StopNotifications();
                 StopForeground(true);
-                ReleaseSysLock();
+                ReleaseLocks();
             }
         }
 
-        public void OnLoadingChanged(bool isLoading)
+        void OnScheduleRefresh()
+        {
+            (var artist, var title) = _schedule.GetCurrent();
+
+            _notificationManager.Notify(NotificationId, CreateNotificationBuilder()
+                                                            .SetContentTitle(title)
+                                                            .SetContentText(artist)
+                                                            .Build());
+
+            Schedule?.Invoke(this, new RadioStationServiceScheduleEventArgs(artist, title));
+        }
+
+        void IPlayerEventListener.OnLoadingChanged(bool isLoading)
         {
         }
 
-        public void OnPlaybackParametersChanged(PlaybackParameters playbackParameters)
+        void IPlayerEventListener.OnPlaybackParametersChanged(PlaybackParameters playbackParameters)
         {
         }
 
-        public void OnPlayerError(ExoPlaybackException e)
+        void IPlayerEventListener.OnPlayerError(ExoPlaybackException e)
         {
             _scheduleRefresh.Stop();
-            StopNotification();
+            StopNotifications();
             StopForeground(true);
-            ReleaseSysLock();
+            ReleaseLocks();
             Error?.Invoke(this, new RadioStationServiceErrorEventArgs(e));
         }
 
-        public void OnPlayerStateChanged(bool playWhenReady, int playbackState)
+        void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)
         {
             string contentTitle = null;
 
@@ -305,32 +305,32 @@ namespace wzxv
                 builder.SetContentTitle(contentTitle);
             }
 
-            _notificationManager.Notify(NOTIFICATION_ID, builder.Build());
+            _notificationManager.Notify(NotificationId, builder.Build());
 
             StateChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        public void OnPositionDiscontinuity(int reason)
+        void IPlayerEventListener.OnPositionDiscontinuity(int reason)
         {
         }
 
-        public void OnRepeatModeChanged(int reason)
+        void IPlayerEventListener.OnRepeatModeChanged(int reason)
         {
         }
 
-        public void OnSeekProcessed()
+        void IPlayerEventListener.OnSeekProcessed()
         {
         }
 
-        public void OnShuffleModeEnabledChanged(bool reason)
+        void IPlayerEventListener.OnShuffleModeEnabledChanged(bool reason)
         {
         }
 
-        public void OnTimelineChanged(Timeline timeline, Java.Lang.Object manifest, int reason)
+        void IPlayerEventListener.OnTimelineChanged(Timeline timeline, Java.Lang.Object manifest, int reason)
         {
         }
 
-        public void OnTracksChanged(TrackGroupArray ignored, TrackSelectionArray trackSelections)
+        void IPlayerEventListener.OnTracksChanged(TrackGroupArray ignored, TrackSelectionArray trackSelections)
         {
         }
     }

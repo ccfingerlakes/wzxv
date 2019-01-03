@@ -30,6 +30,11 @@ namespace wzxv
         public const string ActivityName = "wzxv.app.main";
         private const int UI_REFRESH_INTERVAL = 1000;
 
+        private ImageView PhoneButton => FindViewById<ImageView>(Resource.Id.phoneButton);
+        private TextView PhoneLink => FindViewById<TextView>(Resource.Id.phoneLink);
+        private ImageView MapButton => FindViewById<ImageView>(Resource.Id.mapButton);
+        private ImageView MailButton => FindViewById<ImageView>(Resource.Id.mailButton);
+        private TextView MailLink => FindViewById<TextView>(Resource.Id.mailLink);
         private ImageView WebsiteButton => FindViewById<ImageView>(Resource.Id.websiteButton);
         private ImageView FacebookButton => FindViewById<ImageView>(Resource.Id.facebookButton);
         private ImageView TwitterButton => FindViewById<ImageView>(Resource.Id.twitterButton);
@@ -84,12 +89,45 @@ namespace wzxv
             FacebookButton.Click += (_, __) => LaunchBrowser("https://www.facebook.com/WZXVTheWord/");
             TwitterButton.Click += (_, __) => LaunchBrowser("https://twitter.com/wzxvtheword");
             InstagramButton.Click += (_, __) => LaunchBrowser("https://www.instagram.com/wzxvtheword/");
+
+            if (PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
+            {
+                PhoneButton.Click += (_, __) => DialNumber("5853983569");
+                PhoneLink.Click += (_, __) => DialNumber("5853983569");
+            }
+
+            MapButton.Click += (_, __) => ShowMap(42.9465473, -77.3333895);
+
+            MailButton.Click += (_, __) => SendMail("manager@wzxv.org");
+            MailLink.Click += (_, __) => SendMail("manager@wzxv.org");
         }
 
         void LaunchBrowser(string url)
         {
             var uri = Android.Net.Uri.Parse(url);
             var intent = new Intent(Intent.ActionView, uri);
+            StartActivity(intent);
+        }
+
+        void DialNumber(string number)
+        {
+            var uri = Android.Net.Uri.Parse($"tel:{number}");
+            var intent = new Intent(Intent.ActionDial, uri);
+            StartActivity(intent);
+        }
+
+        void ShowMap(double latitude, double longitude)
+        {
+            var uri = Android.Net.Uri.Parse($"geo:{latitude},{longitude}?q=Calvary Chapel of the Finger Lakes, 1777 Rochester Rd, Farmington NY 14425");
+            var intent = new Intent(Intent.ActionView, uri);
+            StartActivity(intent);
+        }
+
+        void SendMail(string to)
+        {
+            var intent = new Intent(Intent.ActionSend)
+                            .PutExtra(Android.Content.Intent.ExtraEmail, new[] { to })
+                            .SetType("message/rfc822");
             StartActivity(intent);
         }
 
@@ -142,7 +180,7 @@ namespace wzxv
             }
             else
             {
-                StartForegroundService(new Intent(ApplicationContext, typeof(RadioStationService)).SetAction(RadioStationService.ACTION_PLAY));
+                StartForegroundService(new Intent(ApplicationContext, typeof(RadioStationService)).SetAction(RadioStationService.ActionPlay));
             }
         }
 

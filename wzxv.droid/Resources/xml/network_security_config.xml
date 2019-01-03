@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <domain-config cleartextTrafficPermitted="true">
+    <domain includeSubdomains="false">ic2.christiannetcast.com</domain>
+    <domain includeSubdomains="true">wzxv.org</domain>
+  </domain-config>
+</network-security-config>

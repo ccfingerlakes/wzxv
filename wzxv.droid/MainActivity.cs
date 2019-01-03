@@ -1,27 +1,18 @@
 ﻿using Android.App;
+using Android.Content;
+using Android.Content.PM;
+using Android.Graphics;
+using Android.Media;
 using Android.OS;
 using Android.Support.V7.App;
-using Android.Runtime;
 using Android.Widget;
-using Android.Content.PM;
 using System;
-using System.Linq;
-using Com.Google.Android.Exoplayer2.Source;
-using Com.Google.Android.Exoplayer2.Extractor;
-using Com.Google.Android.Exoplayer2.Upstream;
-using Com.Google.Android.Exoplayer2;
-using Com.Google.Android.Exoplayer2.Trackselection;
-using Com.Google.Android.Exoplayer2.Util;
-using Android.Media.Session;
-using Java.Lang;
-using Java.IO;
-using Android.Content;
 using System.Net.Http;
-using System.Globalization;
-using System.Collections.Generic;
 using System.Timers;
-using Android.Media;
-using Android.Graphics;
+using Microsoft.AppCenter;
+using Microsoft.AppCenter.Analytics;
+using Microsoft.AppCenter.Crashes;
+using System.Collections.Generic;
 
 namespace wzxv
 {
@@ -29,28 +20,10 @@ namespace wzxv
     public class MainActivity : AppCompatActivity
     {
         public const string ActivityName = "wzxv.app.main";
-        private const int UI_REFRESH_INTERVAL = 1000;
 
-        private ImageView PhoneButton => FindViewById<ImageView>(Resource.Id.phoneButton);
-        private TextView PhoneLink => FindViewById<TextView>(Resource.Id.phoneLink);
-        private ImageView MapButton => FindViewById<ImageView>(Resource.Id.mapButton);
-        private ImageView MailButton => FindViewById<ImageView>(Resource.Id.mailButton);
-        private TextView MailLink => FindViewById<TextView>(Resource.Id.mailLink);
-        private ImageView WebsiteButton => FindViewById<ImageView>(Resource.Id.websiteButton);
-        private ImageView FacebookButton => FindViewById<ImageView>(Resource.Id.facebookButton);
-        private ImageView TwitterButton => FindViewById<ImageView>(Resource.Id.twitterButton);
-        private ImageView InstagramButton => FindViewById<ImageView>(Resource.Id.instagramButton);
-        private ImageView VolumeMaxButton => FindViewById<ImageView>(Resource.Id.volumeMaxButton);
-        private ImageView VolumeMinButton => FindViewById<ImageView>(Resource.Id.volumeMinButton);
-        private SeekBar VolumeBar => FindViewById<SeekBar>(Resource.Id.volumeBar);
-        private TextView ArtistLabel => FindViewById<TextView>(Resource.Id.artistLabel);
-        private TextView TitleLabel => FindViewById<TextView>(Resource.Id.titleLabel);
-        private ImageView CoverImage => FindViewById<ImageView>(Resource.Id.coverImage);
-        private ImageView PlayButton => FindViewById<ImageView>(Resource.Id.playButton);
-
-        private RadioStationServiceBinder RadioStationServiceBinder { get; set; } = null;
-        private Timer _refresh;
+        private RadioStationServiceBinder _service;
         private string _metadataUrl = null;
+        private readonly Timer _volumeRefresh = new Timer(1000);
         private readonly HttpClient _http = new HttpClient();
         
         private AudioManager _audioManager;
@@ -58,10 +31,11 @@ namespace wzxv
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
+            AppCenter.Start("f5115ef1-a47c-437e-8d62-9899be633736", typeof(Analytics), typeof(Crashes));
+            Controls.Register(this);
+
             _audioManager = (AudioManager)GetSystemService(AudioService);
-            _networkStatus = new NetworkStatus(ApplicationContext);
-            _networkStatus.Connected += OnNetworkConnected;
-            _networkStatus.Disconnected += OnNetworkDisconnected;
+            _networkStatus = new NetworkStatus(ApplicationContext, connected: OnNetworkConnected, disconnected: OnNetworkDisconnected);
 
             base.Window.RequestFeature(Android.Views.WindowFeatures.ActionBar);
             base.SetTheme(Resource.Style.AppTheme);
@@ -70,71 +44,93 @@ namespace wzxv
             
             SetContentView(Resource.Layout.Main);
 
-            TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
-            ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
-            CoverImage.Visibility = Android.Views.ViewStates.Invisible;
-            CoverImage.Click += (_, __) =>
-            {
-                if (_metadataUrl != null)
-                    LaunchBrowser(_metadataUrl);
-            };
-
-            VolumeMinButton.Click += OnVolumeMinButtonClick;
-            VolumeMaxButton.Click += OnVolumeMaxButtonClick;
-
-            var volumeBar = VolumeBar;
-            volumeBar.Max = _audioManager.GetStreamMaxVolume(Stream.Music);
-            volumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
-            volumeBar.ProgressChanged += OnVolumeChanged;
-
-            if (RadioStationServiceBinder == null)
+            if (_service == null)
             {
                 var intent = new Intent(ApplicationContext, typeof(RadioStationService));
                 var connection = new AudioPlayerServiceConnection(this);
                 BindService(intent, connection, Bind.AutoCreate);
             }
 
-            PlayButton.Click += OnPlayButtonClick;
+            InitializeControls();
 
-            _refresh = new Timer(UI_REFRESH_INTERVAL);
-            _refresh.Elapsed += (_, __) => OnRefresh();
-            _refresh.Start();
+            if (!_networkStatus.IsConnected)
+                OnNetworkDisconnected();
+        }
 
-            WebsiteButton.Click += (_, __) => LaunchBrowser("http://wzxv.org");
-            FacebookButton.Click += (_, __) => LaunchBrowser("https://www.facebook.com/WZXVTheWord/");
-            TwitterButton.Click += (_, __) => LaunchBrowser("https://twitter.com/wzxvtheword");
-            InstagramButton.Click += (_, __) => LaunchBrowser("https://www.instagram.com/wzxvtheword/");
+        void InitializeControls()
+        {
+            if (Build.VERSION.SdkInt < BuildVersionCodes.N)
+            {
+                Controls.VolumeControls.Visibility = Android.Views.ViewStates.Gone;
+            }
+            else
+            {
+                Controls.VolumeMinButton.Click += OnVolumeMinButtonClick;
+                Controls.VolumeMaxButton.Click += OnVolumeMaxButtonClick;
+
+                Controls.VolumeBar.Configure(volumeBar =>
+                {
+                    volumeBar.Max = _audioManager.GetStreamMaxVolume(Stream.Music);
+                    volumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), true);
+                    volumeBar.ProgressChanged += OnVolumeChanged;
+                });
+
+                _volumeRefresh.Elapsed += (_, __) => OnRefresh();
+                _volumeRefresh.Start();
+            }
+
+            Controls.TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
+            Controls.ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
+            Controls.CoverImage.Configure(coverImage =>
+            {
+                coverImage.Visibility = Android.Views.ViewStates.Invisible;
+                coverImage.Click += (_, __) =>
+                {
+                    if (_metadataUrl != null)
+                        LaunchBrowser(_metadataUrl);
+                };
+            });
+
+            Controls.PlayButton.Click += OnPlayButtonClick;
+
+            Controls.WebsiteButton.Click += (_, __) => LaunchBrowser("http://wzxv.org");
+            Controls.FacebookButton.Click += (_, __) => LaunchBrowser("https://www.facebook.com/WZXVTheWord/");
+            Controls.TwitterButton.Click += (_, __) => LaunchBrowser("https://twitter.com/wzxvtheword");
+            Controls.InstagramButton.Click += (_, __) => LaunchBrowser("https://www.instagram.com/wzxvtheword/");
 
             if (PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
             {
-                PhoneButton.Click += (_, __) => DialNumber("5853983569");
-                PhoneLink.Click += (_, __) => DialNumber("5853983569");
+                Controls.PhoneButton.Click += (_, __) => DialNumber("5853983569");
+                Controls.PhoneLink.Click += (_, __) => DialNumber("5853983569");
             }
 
-            MapButton.Click += (_, __) => ShowMap(42.9465473, -77.3333895);
+            Controls.MapButton.Click += (_, __) => ShowMap(42.9465473, -77.3333895);
 
-            MailButton.Click += (_, __) => SendMail("manager@wzxv.org");
-            MailLink.Click += (_, __) => SendMail("manager@wzxv.org");
-
-            if (!_networkStatus.IsConnected)
-                OnNetworkDisconnected(this, EventArgs.Empty);
+            Controls.MailButton.Click += (_, __) => SendMail("manager@wzxv.org");
+            Controls.MailLink.Click += (_, __) => SendMail("manager@wzxv.org");
         }
 
-        private void OnNetworkConnected(object sender, EventArgs e)
+        void OnNetworkConnected()
         {
-            PlayButton.Alpha = 1.0f;
-            PlayButton.Clickable = true;
-        }
-
-        private void OnNetworkDisconnected(object sender, EventArgs e)
-        {
-            if (RadioStationServiceBinder != null && RadioStationServiceBinder.Service.IsPlaying)
+            Controls.PlayButton.Configure(playButton =>
             {
-                RadioStationServiceBinder.Service.Stop();
+                playButton.Alpha = 1.0f;
+                playButton.Clickable = true;
+            });
+        }
+
+        void OnNetworkDisconnected()
+        {
+            if (_service != null && _service.Service.IsPlaying)
+            {
+                _service.Service.Stop();
             }
 
-            PlayButton.Alpha = 0.6f;
-            PlayButton.Clickable = false;
+            Controls.PlayButton.Configure(playButton =>
+            {
+                playButton.Alpha = 0.6f;
+                playButton.Clickable = false;
+            });
         }
 
         void LaunchBrowser(string url)
@@ -181,26 +177,29 @@ namespace wzxv
         protected override void OnDestroy()
         {
             base.OnDestroy();
-            _refresh.Stop();
-            _refresh.Dispose();
+            _volumeRefresh.Stop();
+            _volumeRefresh.Dispose();
         }
 
         void OnRefresh()
         {
-            RunOnUiThread(() =>
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.N)
             {
-                VolumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
-            });
+                RunOnUiThread(() =>
+                {
+                    Controls.VolumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
+                });
+            }
         }
 
         void OnRadioStationSchedule(object sender, RadioStationServiceMetadataChangedEventArgs e)
         {
             RunOnUiThread(() =>
             {
-                ArtistLabel.Text = e.Artist;
-                TitleLabel.Text = e.Title;
+                Controls.ArtistLabel.Text = e.Artist;
+                Controls.TitleLabel.Text = e.Title;
                 _metadataUrl = e.Url;
-                CoverImage.SetImageResource(Resource.Drawable.logo);
+                Controls.CoverImage.SetImageResource(Resource.Drawable.logo);
 
                 if (e.ImageUrl != null)
                 {
@@ -210,7 +209,7 @@ namespace wzxv
                         {
                             if (response.IsSuccessStatusCode)
                             {
-                                CoverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
+                                Controls.CoverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
                             }
                         }
                     }
@@ -228,36 +227,51 @@ namespace wzxv
 
         void OnPlayButtonClick(object sender, EventArgs e)
         {
-            if (RadioStationServiceBinder.Service.IsPlaying)
+            if (_service.Service.IsPlaying)
             {
-                RadioStationServiceBinder.Service.Stop();
+                _service.Service.Stop();
+                AppCenterEvents.Stop();
             }
             else
             {
-                StartForegroundService(new Intent(ApplicationContext, typeof(RadioStationService)).SetAction(RadioStationService.ActionPlay));
+                var intent = new Intent(ApplicationContext, typeof(RadioStationService)).SetAction(RadioStationService.ActionPlay);
+
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+                {
+                    StartForegroundService(intent);
+                }
+                else
+                {
+                    StartService(intent);
+                }
+
+                AppCenterEvents.Play();
             }
         }
 
         void OnRadioStationStateChanged(object sender, EventArgs e)
         {
-            if (RadioStationServiceBinder.Service.IsPlaying)
+            if (_service.Service.IsPlaying)
             {
-                PlayButton.SetImageResource(Resource.Drawable.pause);
-                TitleLabel.Visibility = Android.Views.ViewStates.Visible;
-                ArtistLabel.Visibility = Android.Views.ViewStates.Visible;
-                CoverImage.Visibility = Android.Views.ViewStates.Visible;
+                Controls.PlayButton.SetImageResource(Resource.Drawable.pause);
+                Controls.TitleLabel.Visibility = Android.Views.ViewStates.Visible;
+                Controls.ArtistLabel.Visibility = Android.Views.ViewStates.Visible;
+                Controls.CoverImage.Visibility = Android.Views.ViewStates.Visible;
+                AppCenterEvents.Playing();
             }
             else
             {
-                PlayButton.SetImageResource(Resource.Drawable.play);
-                TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
-                ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
-                CoverImage.Visibility = Android.Views.ViewStates.Invisible;
+                Controls.PlayButton.SetImageResource(Resource.Drawable.play);
+                Controls.TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
+                Controls.ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
+                Controls.CoverImage.Visibility = Android.Views.ViewStates.Invisible;
+                AppCenterEvents.Stopped();
             }
         }
 
         void OnRadioStationError(object sender, RadioStationServiceErrorEventArgs e)
         {
+            AppCenterEvents.Error(e.Exception);
             Toast.MakeText(ApplicationContext, "The stream for WZXV - The Word was interrupted", ToastLength.Long).Show();
         }
 
@@ -274,7 +288,7 @@ namespace wzxv
             {
                 if (service is RadioStationServiceBinder binder)
                 {
-                    _instance.RadioStationServiceBinder = binder;
+                    _instance._service = binder;
                     binder.Service.StateChanged += _instance.OnRadioStationStateChanged;
                     binder.Service.Error += _instance.OnRadioStationError;
                     binder.Service.Metadata += _instance.OnRadioStationSchedule;
@@ -283,8 +297,34 @@ namespace wzxv
 
             public void OnServiceDisconnected(ComponentName name)
             {
-                _instance.RadioStationServiceBinder = null;
+                _instance._service = null;
             }
+        }
+
+        static class Controls
+        {
+            private static MainActivity __activity;
+
+            public static void Register(MainActivity activity)
+                => __activity = activity;
+
+            public static ImageView PhoneButton => __activity?.FindViewById<ImageView>(Resource.Id.phoneButton);
+            public static TextView PhoneLink => __activity?.FindViewById<TextView>(Resource.Id.phoneLink);
+            public static ImageView MapButton => __activity?.FindViewById<ImageView>(Resource.Id.mapButton);
+            public static ImageView MailButton => __activity?.FindViewById<ImageView>(Resource.Id.mailButton);
+            public static TextView MailLink => __activity?.FindViewById<TextView>(Resource.Id.mailLink);
+            public static ImageView WebsiteButton => __activity?.FindViewById<ImageView>(Resource.Id.websiteButton);
+            public static ImageView FacebookButton => __activity?.FindViewById<ImageView>(Resource.Id.facebookButton);
+            public static ImageView TwitterButton => __activity?.FindViewById<ImageView>(Resource.Id.twitterButton);
+            public static ImageView InstagramButton => __activity?.FindViewById<ImageView>(Resource.Id.instagramButton);
+            public static ImageView VolumeMaxButton => __activity?.FindViewById<ImageView>(Resource.Id.volumeMaxButton);
+            public static ImageView VolumeMinButton => __activity?.FindViewById<ImageView>(Resource.Id.volumeMinButton);
+            public static SeekBar VolumeBar => __activity?.FindViewById<SeekBar>(Resource.Id.volumeBar);
+            public static TextView ArtistLabel => __activity?.FindViewById<TextView>(Resource.Id.artistLabel);
+            public static TextView TitleLabel => __activity?.FindViewById<TextView>(Resource.Id.titleLabel);
+            public static ImageView CoverImage => __activity?.FindViewById<ImageView>(Resource.Id.coverImage);
+            public static ImageView PlayButton => __activity?.FindViewById<ImageView>(Resource.Id.playButton);
+            public static LinearLayout VolumeControls => __activity?.FindViewById<LinearLayout>(Resource.Id.volumeControls);
         }
     }
 }

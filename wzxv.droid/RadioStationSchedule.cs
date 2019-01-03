@@ -10,6 +10,7 @@ using Android.App;
 using Android.Content;
 using Android.OS;
 using Android.Runtime;
+using Android.Util;
 using Android.Views;
 using Android.Widget;
 
@@ -17,6 +18,7 @@ namespace wzxv
 {
     public class RadioStationSchedule : IDisposable
     {
+        private const string TAG = "wzxv.app.radio.schedule";
         private const string SlotsUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
         private const string ArtistsUrl = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/android/artists.csv";
 
@@ -160,8 +162,10 @@ namespace wzxv
                                 }
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            Log.Error(TAG, $"Failed to retrieve slots metadata: {ex.Message}");
+                            Log.Debug(TAG, ex.ToString());
                         }
                     }),
                     Task.Run(async () =>
@@ -176,8 +180,10 @@ namespace wzxv
                                 }
                             }
                         }
-                        catch
+                        catch (Exception ex)
                         {
+                            Log.Error(TAG, $"Failed to retrieve slots metadata: {ex.Message}");
+                            Log.Debug(TAG, ex.ToString());
                         }
                     })
                 ).Wait();

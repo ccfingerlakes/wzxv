@@ -20,9 +20,14 @@ namespace wzxv
         public event EventHandler<EventArgs> Connected;
         public event EventHandler<EventArgs> Disconnected;
 
-        public NetworkStatus(Context context)
+        public NetworkStatus(Context context, Action connected = null, Action disconnected = null)
         {
             _manager = (ConnectivityManager)context.GetSystemService(Context.ConnectivityService);
+
+            if (connected != null)
+                Connected += (_, __) => connected();
+            if (disconnected != null)
+                Disconnected += (_, __) => disconnected();
             
             var receiver = new NetworkStatusBroadcastReceiver(OnNetworkStatusChanged);
             context.RegisterReceiver(receiver, new IntentFilter(ConnectivityManager.ConnectivityAction));

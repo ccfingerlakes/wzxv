@@ -27,15 +27,18 @@ namespace wzxv
         {
             _context = context;
             _manager = manager;
-            
-            var channel = new NotificationChannel(ChannelId, "Playback", NotificationImportance.Low)
+
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
             {
-                LockscreenVisibility = NotificationVisibility.Public
-            };
+                var channel = new NotificationChannel(ChannelId, "Playback", NotificationImportance.Low)
+                {
+                    LockscreenVisibility = NotificationVisibility.Public
+                };
 
-            channel.SetShowBadge(false);
+                channel.SetShowBadge(false);
 
-            _manager.CreateNotificationChannel(channel);
+                _manager.CreateNotificationChannel(channel);
+            }
         }
 
         public NotificationCompat.Builder CreateNotificationBuilder()

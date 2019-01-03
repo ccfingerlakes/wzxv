@@ -59,9 +59,14 @@
     <Reference Include="Mono.Android" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="NetworkStatus.cs" />
+    <Compile Include="RadioStationMediaSession.cs" />
+    <Compile Include="RadioStationNotificationManager.cs" />
     <Compile Include="RadioStationSchedule.cs" />
     <Compile Include="RadioStationService.cs" />
     <Compile Include="MainActivity.cs" />
+    <Compile Include="RadioStationServiceLock.cs" />
+    <Compile Include="RadioStationBroadcastReceiver.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

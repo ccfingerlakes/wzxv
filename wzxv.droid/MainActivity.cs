@@ -21,6 +21,7 @@ using System.Globalization;
 using System.Collections.Generic;
 using System.Timers;
 using Android.Media;
+using Android.Graphics;
 
 namespace wzxv
 {
@@ -44,16 +45,24 @@ namespace wzxv
         private SeekBar VolumeBar => FindViewById<SeekBar>(Resource.Id.volumeBar);
         private TextView ArtistLabel => FindViewById<TextView>(Resource.Id.artistLabel);
         private TextView TitleLabel => FindViewById<TextView>(Resource.Id.titleLabel);
+        private ImageView CoverImage => FindViewById<ImageView>(Resource.Id.coverImage);
         private ImageView PlayButton => FindViewById<ImageView>(Resource.Id.playButton);
-        private RadioStationServiceBinder AudioPlayerServiceBinder { get; set; } = null;
-        private Timer _refresh;
 
+        private RadioStationServiceBinder RadioStationServiceBinder { get; set; } = null;
+        private Timer _refresh;
+        private string _metadataUrl = null;
+        private readonly HttpClient _http = new HttpClient();
+        
         private AudioManager _audioManager;
+        private NetworkStatus _networkStatus;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
             _audioManager = (AudioManager)GetSystemService(AudioService);
-            
+            _networkStatus = new NetworkStatus(ApplicationContext);
+            _networkStatus.Connected += OnNetworkConnected;
+            _networkStatus.Disconnected += OnNetworkDisconnected;
+
             base.Window.RequestFeature(Android.Views.WindowFeatures.ActionBar);
             base.SetTheme(Resource.Style.AppTheme);
             
@@ -63,6 +72,12 @@ namespace wzxv
 
             TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
             ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
+            CoverImage.Visibility = Android.Views.ViewStates.Invisible;
+            CoverImage.Click += (_, __) =>
+            {
+                if (_metadataUrl != null)
+                    LaunchBrowser(_metadataUrl);
+            };
 
             VolumeMinButton.Click += OnVolumeMinButtonClick;
             VolumeMaxButton.Click += OnVolumeMaxButtonClick;
@@ -72,7 +87,7 @@ namespace wzxv
             volumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
             volumeBar.ProgressChanged += OnVolumeChanged;
 
-            if (AudioPlayerServiceBinder == null)
+            if (RadioStationServiceBinder == null)
             {
                 var intent = new Intent(ApplicationContext, typeof(RadioStationService));
                 var connection = new AudioPlayerServiceConnection(this);
@@ -100,6 +115,26 @@ namespace wzxv
 
             MailButton.Click += (_, __) => SendMail("manager@wzxv.org");
             MailLink.Click += (_, __) => SendMail("manager@wzxv.org");
+
+            if (!_networkStatus.IsConnected)
+                OnNetworkDisconnected(this, EventArgs.Empty);
+        }
+
+        private void OnNetworkConnected(object sender, EventArgs e)
+        {
+            PlayButton.Alpha = 1.0f;
+            PlayButton.Clickable = true;
+        }
+
+        private void OnNetworkDisconnected(object sender, EventArgs e)
+        {
+            if (RadioStationServiceBinder != null && RadioStationServiceBinder.Service.IsPlaying)
+            {
+                RadioStationServiceBinder.Service.Stop();
+            }
+
+            PlayButton.Alpha = 0.6f;
+            PlayButton.Clickable = false;
         }
 
         void LaunchBrowser(string url)
@@ -158,12 +193,31 @@ namespace wzxv
             });
         }
 
-        void OnRadioStationSchedule(object sender, RadioStationServiceScheduleEventArgs e)
+        void OnRadioStationSchedule(object sender, RadioStationServiceMetadataChangedEventArgs e)
         {
             RunOnUiThread(() =>
             {
                 ArtistLabel.Text = e.Artist;
                 TitleLabel.Text = e.Title;
+                _metadataUrl = e.Url;
+                CoverImage.SetImageResource(Resource.Drawable.logo);
+
+                if (e.ImageUrl != null)
+                {
+                    try
+                    {
+                        using (var response = _http.GetAsync(e.ImageUrl).Result)
+                        {
+                            if (response.IsSuccessStatusCode)
+                            {
+                                CoverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
             });
         }
 
@@ -174,9 +228,9 @@ namespace wzxv
 
         void OnPlayButtonClick(object sender, EventArgs e)
         {
-            if (AudioPlayerServiceBinder.Service.IsPlaying)
+            if (RadioStationServiceBinder.Service.IsPlaying)
             {
-                AudioPlayerServiceBinder.Service.Stop();
+                RadioStationServiceBinder.Service.Stop();
             }
             else
             {
@@ -186,17 +240,19 @@ namespace wzxv
 
         void OnRadioStationStateChanged(object sender, EventArgs e)
         {
-            if (AudioPlayerServiceBinder.Service.IsPlaying)
+            if (RadioStationServiceBinder.Service.IsPlaying)
             {
                 PlayButton.SetImageResource(Resource.Drawable.pause);
                 TitleLabel.Visibility = Android.Views.ViewStates.Visible;
                 ArtistLabel.Visibility = Android.Views.ViewStates.Visible;
+                CoverImage.Visibility = Android.Views.ViewStates.Visible;
             }
             else
             {
                 PlayButton.SetImageResource(Resource.Drawable.play);
                 TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
                 ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
+                CoverImage.Visibility = Android.Views.ViewStates.Invisible;
             }
         }
 
@@ -218,16 +274,16 @@ namespace wzxv
             {
                 if (service is RadioStationServiceBinder binder)
                 {
-                    _instance.AudioPlayerServiceBinder = binder;
+                    _instance.RadioStationServiceBinder = binder;
                     binder.Service.StateChanged += _instance.OnRadioStationStateChanged;
                     binder.Service.Error += _instance.OnRadioStationError;
-                    binder.Service.Schedule += _instance.OnRadioStationSchedule;
+                    binder.Service.Metadata += _instance.OnRadioStationSchedule;
                 }
             }
 
             public void OnServiceDisconnected(ComponentName name)
             {
-                _instance.AudioPlayerServiceBinder = null;
+                _instance.RadioStationServiceBinder = null;
             }
         }
     }

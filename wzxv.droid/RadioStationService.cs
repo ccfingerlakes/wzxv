@@ -11,6 +11,7 @@ using Android.Net;
 using Android.Net.Wifi;
 using Android.OS;
 using Android.Support.V4.App;
+using Android.Support.V4.Media.Session;
 using Com.Google.Android.Exoplayer2;
 using Com.Google.Android.Exoplayer2.Metadata;
 using Com.Google.Android.Exoplayer2.Source;
@@ -22,47 +23,37 @@ namespace wzxv
 {
     [Service(Name = "wzxv.app.audio")]
     [IntentFilter(new [] {  ActionPlay, ActionStop })]
-    public class RadioStationService : Service, IPlayerEventListener
+    public class RadioStationService : Service, IPlayerEventListener, AudioManager.IOnAudioFocusChangeListener
     {
         private const int NotificationId = 1;
         private const string ChannelId = "wzxv.app.PLAYBACK";
         private const string StreamUrl = "http://ic2.christiannetcast.com/wzxv-fm";
-        private const string ScheduleUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
-        private const int ScheduleRefreshInterval = 15000;
-
+        
         public const string ActionPlay = "wzxv.app.PLAY";
         public const string ActionStop = "wzxv.app.STOP";
         public const string ActionToggle = "wzxv.app.TOGGLE";
 
         private SimpleExoPlayer _player;
-        private NotificationManager _notificationManager;
         private AudioManager _audioManager;
-        private WifiManager _wifiManager;
-        private WifiManager.WifiLock _wifiLock;
-        private PowerManager _powerManager;
-        private PowerManager.WakeLock _powerWakeLock;
-        private RadioStationServiceBinder _binder;
+        private RadioStationNotificationManager _notificationManager;
+        private RadioStationMediaSession _mediaSession;
         private RadioStationSchedule _schedule;
-        private Timer _scheduleRefresh;
+        private RadioStationServiceLock _lock;
+        private RadioStationServiceBinder _binder;
 
         public bool IsStarted { get; private set; } = false;
         public bool IsPlaying => _player != null && _player.PlayWhenReady == true && _player.PlaybackState == Player.StateReady;
 
-        public event Action<object, RadioStationServiceScheduleEventArgs> Schedule;
-        public event Action<object, EventArgs> StateChanged;
-        public event Action<object, RadioStationServiceErrorEventArgs> Error;
+        public event EventHandler<RadioStationServiceMetadataChangedEventArgs> Metadata;
+        public event EventHandler StateChanged;
+        public event EventHandler<RadioStationServiceErrorEventArgs> Error;
 
         public override void OnCreate()
         {
             base.OnCreate();
-
             _audioManager = (AudioManager)GetSystemService(AudioService);
-            _wifiManager = (WifiManager)GetSystemService(WifiService);
-            _notificationManager = (NotificationManager)GetSystemService(NotificationService);
-            _powerManager = (PowerManager)GetSystemService(PowerService);
-            _schedule = RadioStationSchedule.LoadFrom(ScheduleUrl);
-            _scheduleRefresh = new Timer(ScheduleRefreshInterval);
-            _scheduleRefresh.Elapsed += (_, __) => OnScheduleRefresh();
+            _notificationManager = new RadioStationNotificationManager(ApplicationContext);
+            _schedule = new RadioStationSchedule(OnScheduleChanged);
         }
 
         public override IBinder OnBind(Intent intent)
@@ -71,35 +62,41 @@ namespace wzxv
             return _binder;
         }
 
-        public override bool OnUnbind(Intent intent)
-        {
-            StopNotifications();
-            return base.OnUnbind(intent);
-        }
-
         public override void OnDestroy()
         {
             base.OnDestroy();
 
-            if (_scheduleRefresh != null)
+            if (_schedule != null)
             {
-                _scheduleRefresh.Stop();
-                _scheduleRefresh.Dispose();
-                _scheduleRefresh = null;
+                _schedule.Dispose();
+                _schedule = null;
             }
 
             if (_player != null)
             {
-                if (IsPlaying)
-                    _player.Stop();
-
                 _player.Release();
                 _player = null;
-
-                StopNotifications();
-                StopForeground(true);
-                ReleaseLocks();
             }
+
+            if (_mediaSession != null)
+            {
+                _mediaSession.Dispose();
+                _mediaSession = null;
+            }
+
+            if (_notificationManager != null)
+            {
+                _notificationManager.Stop();
+                _notificationManager = null;
+            }
+
+            if (_lock != null)
+            {
+                _lock.Dispose();
+                _lock = null;
+            }
+
+            StopForeground(true);
         }
 
         public override StartCommandResult OnStartCommand(Intent intent, StartCommandFlags flags, int startId)
@@ -108,13 +105,7 @@ namespace wzxv
             {
                 if (!IsStarted)
                 {
-                    RegisterNotificationChannel();
-                    
-                    var notification = CreateNotificationBuilder()
-                                        .Build();
-
-                    StartForeground(NotificationId, notification);
-
+                    StartForeground(NotificationId, _notificationManager.CreateNotificationBuilder().Build());
                     IsStarted = true;
                 }
             }
@@ -135,72 +126,6 @@ namespace wzxv
             return StartCommandResult.Sticky;
         }
 
-        void RegisterNotificationChannel()
-        {
-            var channel = new NotificationChannel(ChannelId, "Playback", NotificationImportance.Low)
-            {
-                LockscreenVisibility = NotificationVisibility.Public
-            };
-
-            channel.SetShowBadge(false);
-
-            _notificationManager.CreateNotificationChannel(channel);
-        }
-
-        NotificationCompat.Builder CreateNotificationBuilder()
-        {
-            var pendingIntent = PendingIntent.GetActivity(ApplicationContext, 0, new Intent(ApplicationContext, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
-            
-            var builder = new NotificationCompat.Builder(ApplicationContext)
-                .SetSmallIcon(Resource.Drawable.headset)
-                .SetContentIntent(pendingIntent)
-                .SetOngoing(true)
-                .SetVisibility(NotificationCompat.VisibilityPublic)
-                .SetContentTitle("WZXV - The Word");
-
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
-            {
-                builder.SetChannelId(ChannelId);
-            }
-            
-            return builder;
-        }
-
-        void StopNotifications()
-        {
-            _notificationManager.CancelAll();
-        }
-
-        void AquireLocks()
-        {
-            if (_wifiLock == null)
-            {
-                _wifiLock = _wifiManager.CreateWifiLock(WifiMode.Full, "wzxv.app");
-            }
-            _wifiLock.Acquire();
-
-            if (_powerWakeLock == null)
-            {
-                _powerWakeLock = _powerManager.NewWakeLock(WakeLockFlags.Full, "wzxv.app");
-            }
-            _powerWakeLock.Acquire();
-        }
-
-        void ReleaseLocks()
-        {
-            if (_wifiLock != null)
-            {
-                _wifiLock.Release();
-                _wifiLock = null;
-            }
-
-            if (_powerWakeLock != null)
-            {
-                _powerWakeLock.Release();
-                _powerWakeLock = null;
-            }
-        }
-
         void Play()
         {
             if (!IsPlaying)
@@ -217,27 +142,46 @@ namespace wzxv
                 }
 
                 var audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
+                                                    .SetOnAudioFocusChangeListener(this)
                                                     .SetAudioAttributes(new AudioAttributes.Builder()
                                                         .SetUsage(AudioUsageKind.Media)
                                                         .SetContentType(AudioContentType.Music)
                                                         .Build())
                                                     .Build();
-
+                
                 if (_audioManager.RequestAudioFocus(audioFocusRequest) == AudioFocusRequest.Granted)
                 {
-                    AquireLocks();
+                    try
+                    {
+                        _mediaSession = new RadioStationMediaSession(ApplicationContext);
+                        _lock = new RadioStationServiceLock(ApplicationContext);
 
-                    var mediaUri = Android.Net.Uri.Parse(StreamUrl);
-                    var userAgent = Util.GetUserAgent(this, "wzxv.app");
-                    var defaultHttpDataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
-                    var defaultDataSourceFactory = new DefaultDataSourceFactory(this, null, defaultHttpDataSourceFactory);
-                    var mediaSourceFactory = new ExtractorMediaSource.Factory(defaultDataSourceFactory);
-                    var mediaSource = mediaSourceFactory.CreateMediaSource(mediaUri);
-                    
-                    _player.Prepare(mediaSource);
+                        var mediaUri = Android.Net.Uri.Parse(StreamUrl);
+                        var userAgent = Util.GetUserAgent(this, "wzxv.app");
+                        var defaultHttpDataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
+                        var defaultDataSourceFactory = new DefaultDataSourceFactory(this, null, defaultHttpDataSourceFactory);
+                        var mediaSourceFactory = new ExtractorMediaSource.Factory(defaultDataSourceFactory);
+                        var mediaSource = mediaSourceFactory.CreateMediaSource(mediaUri);
 
-                    OnScheduleRefresh();
-                    _scheduleRefresh.Start();
+                        _player.Prepare(mediaSource);
+                        _schedule.Refresh(force: true);
+                    }
+                    catch
+                    {
+                        if (_mediaSession != null)
+                        {
+                            _mediaSession.Dispose();
+                            _mediaSession = null;
+                        }
+
+                        if (_lock != null)
+                        {
+                            _lock.Dispose();
+                            _lock = null;
+                        }
+
+                        throw;
+                    }
                 }
             }
         }
@@ -246,24 +190,114 @@ namespace wzxv
         {
             if (IsPlaying)
             {
-                _scheduleRefresh.Stop();
                 _player.Stop();
-                StopNotifications();
+                _notificationManager.Stop();
                 StopForeground(true);
-                ReleaseLocks();
+            }
+
+            if (_lock != null)
+            {
+                _lock.Dispose();
+                _lock = null;
+            }
+
+            if (_mediaSession != null)
+            {
+                _mediaSession.Dispose();
+                _mediaSession = null;
             }
         }
 
-        void OnScheduleRefresh()
+        void OnScheduleChanged(RadioStationSchedule.Slot slot)
         {
-            (var artist, var title) = _schedule.GetCurrent();
+            _notificationManager.Notify(NotificationId, builder =>
+            {
+                builder
+                    .SetContentTitle(slot.Title)
+                    .SetContentText(slot.Artist);
 
-            _notificationManager.Notify(NotificationId, CreateNotificationBuilder()
-                                                            .SetContentTitle(title)
-                                                            .SetContentText(artist)
-                                                            .Build());
+                if (IsPlaying)
+                {
+                    builder.AddAction(_notificationManager.CreateAction(Android.Resource.Drawable.IcMediaPause, "Pause", ActionStop));
+                }
+                else
+                {
+                    builder.AddAction(_notificationManager.CreateAction(Android.Resource.Drawable.IcMediaPlay, "Play", ActionPlay));
+                }
+            });
 
-            Schedule?.Invoke(this, new RadioStationServiceScheduleEventArgs(artist, title));
+            if (_mediaSession != null)
+            {
+                _mediaSession.SetMetadata(slot.Artist, slot.Title, builder =>
+                {
+                    if (slot.ImageUrl != null)
+                        builder.PutString(MediaMetadata.MetadataKeyAlbumArtUri, slot.ImageUrl);
+                });
+            }
+
+            Metadata?.Invoke(this, new RadioStationServiceMetadataChangedEventArgs(slot.Artist, slot.Title, slot.Url, slot.ImageUrl));
+        }
+
+        private int? _previousAudioVolume = null;
+        void AudioManager.IOnAudioFocusChangeListener.OnAudioFocusChange(AudioFocus focusChange)
+        {
+            var maxVolume = _audioManager.GetStreamMaxVolume(Stream.Music);
+
+            switch (focusChange)
+            {
+                case AudioFocus.Gain:
+                    Play();
+
+                    if (_previousAudioVolume != null)
+                    {
+                        _audioManager.SetStreamVolume(Stream.Music, _previousAudioVolume.Value, VolumeNotificationFlags.RemoveSoundAndVibrate);
+                        _previousAudioVolume = null;
+                    }
+                    break;
+
+                case AudioFocus.Loss:
+                case AudioFocus.LossTransient:
+                    Stop();
+                    break;
+
+                case AudioFocus.LossTransientCanDuck:
+                    _previousAudioVolume = _audioManager.GetStreamVolume(Stream.Music);
+                    _audioManager.SetStreamVolume(Stream.Music, (int)Math.Round(maxVolume * 0.1), VolumeNotificationFlags.RemoveSoundAndVibrate);
+                    break;
+            }
+        }
+
+        void IPlayerEventListener.OnPlayerError(ExoPlaybackException e)
+        {
+            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);
+
+            _notificationManager.Stop();
+
+            if (_lock != null)
+            {
+                _lock.Dispose();
+                _lock = null;
+            }
+
+            StopForeground(true);
+
+            Error?.Invoke(this, new RadioStationServiceErrorEventArgs(e));
+        }
+
+        void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)
+        {
+            switch (playbackState)
+            {
+                case Player.StateReady:
+                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying);
+                    break;
+
+                case Player.StateBuffering:
+                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StateBuffering);
+                    break;
+            }
+
+            StateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         void IPlayerEventListener.OnLoadingChanged(bool isLoading)
@@ -272,42 +306,6 @@ namespace wzxv
 
         void IPlayerEventListener.OnPlaybackParametersChanged(PlaybackParameters playbackParameters)
         {
-        }
-
-        void IPlayerEventListener.OnPlayerError(ExoPlaybackException e)
-        {
-            _scheduleRefresh.Stop();
-            StopNotifications();
-            StopForeground(true);
-            ReleaseLocks();
-            Error?.Invoke(this, new RadioStationServiceErrorEventArgs(e));
-        }
-
-        void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)
-        {
-            string contentTitle = null;
-
-            switch (playbackState)
-            {
-                case Player.StateReady:
-                    contentTitle = "Playing...";
-                    break;
-
-                case Player.StateBuffering:
-                    contentTitle = "Loading...";
-                    break;
-            }
-
-            var builder = CreateNotificationBuilder();
-
-            if (contentTitle != null)
-            {
-                builder.SetContentTitle(contentTitle);
-            }
-
-            _notificationManager.Notify(NotificationId, builder.Build());
-
-            StateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         void IPlayerEventListener.OnPositionDiscontinuity(int reason)
@@ -335,15 +333,19 @@ namespace wzxv
         }
     }
 
-    public class RadioStationServiceScheduleEventArgs : EventArgs
+    public class RadioStationServiceMetadataChangedEventArgs : EventArgs
     {
         public string Artist { get; private set; }
         public string Title { get; private set; }
+        public string Url { get; private set; }
+        public string ImageUrl { get; private set; }
 
-        public RadioStationServiceScheduleEventArgs(string artist, string title)
+        public RadioStationServiceMetadataChangedEventArgs(string artist, string title, string url, string imageUrl)
         {
             Artist = artist;
             Title = title;
+            Url = url;
+            ImageUrl = imageUrl;
         }
     }
 
@@ -366,143 +368,4 @@ namespace wzxv
             Service = service;
         }
     }
-
-    //    private IExoPlayer _player = null;
-    //    private IMediaSource _mediaSource = null;
-
-    //    public bool IsPlaying => _player.PlayWhenReady == true && _player.PlaybackState == Player.StateReady;
-
-    //    private NotificationManager Notification => (NotificationManager)GetSystemService(NotificationService);
-
-    //    public override void OnCreate()
-    //    {
-    //        base.OnCreate();
-
-    //        var mediaUrl = "http://ic2.christiannetcast.com/wzxv-fm";
-    //        var mediaUri = Android.Net.Uri.Parse(mediaUrl);
-    //        var userAgent = Util.GetUserAgent(this, "wzxv.app");
-    //        var defaultHttpDataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
-    //        var defaultDataSourceFactory = new DefaultDataSourceFactory(this, null, defaultHttpDataSourceFactory);
-    //        var mediaSourceFactory = new ExtractorMediaSource.Factory(defaultDataSourceFactory);
-
-    //        _mediaSource = mediaSourceFactory.CreateMediaSource(mediaUri);
-
-    //        var defaultBandwidthMeter = new DefaultBandwidthMeter();
-    //        var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory(defaultBandwidthMeter);
-    //        var defaultTrackSelector = new DefaultTrackSelector(adaptiveTrackSelectionFactory);
-
-    //        _player = ExoPlayerFactory.NewSimpleInstance(this, defaultTrackSelector);
-    //        _player.AddListener(this);
-    //        _player.PlayWhenReady = true;
-    //    }
-
-    //    public override IBinder OnBind(Intent intent)
-    //    {
-    //        return null;
-    //    }
-
-    //    public override void OnDestroy()
-    //    {
-    //        if (IsPlaying)
-    //        {
-    //            _player.Stop();
-    //        }
-
-    //        _player.Release();
-
-    //        Notification.Cancel(NotificationId);
-
-    //        base.OnDestroy();
-    //    }
-
-    //    public override StartCommandResult OnStartCommand(Intent intent, [GeneratedEnum] StartCommandFlags flags, int startId)
-    //    {
-    //        switch (intent.Action)
-    //        {
-    //            case Play:
-    //                if (!IsPlaying)
-    //                {
-    //                    var channel = new NotificationChannel(NotificationChannelId, "Audio Player", NotificationImportance.Default);
-
-    //                    channel.LockscreenVisibility = NotificationVisibility.Public;
-
-    //                    Notification.CreateNotificationChannel(channel);
-
-    //                    var notification = new Notification.Builder(this, NotificationChannelId)
-    //                                        .SetContentTitle(Resources.GetString(Resource.String.app_name))
-    //                                        .SetContentText("Playing")
-    //                                        .SetSmallIcon(Resource.Drawable.ic_stat_audio)
-    //                                        .SetContentIntent(BuildIntentToShowMainActivity())
-    //                                        .SetOngoing(true)
-    //                                        .Build();
-
-    //                    StartForeground(NotificationId, notification);
-
-    //                    _player.Prepare(_mediaSource);
-    //                }
-    //                break;
-
-    //            case Stop:
-    //                if (IsPlaying)
-    //                {
-    //                    _player.Stop();
-    //                    StopForeground(true);
-    //                    StopSelf();
-    //                }
-    //                break;
-    //        }
-
-    //        return StartCommandResult.Sticky;
-    //    }
-
-    //    PendingIntent BuildIntentToShowMainActivity()
-    //    {
-    //        var notificationIntent = new Intent(this, typeof(MainActivity));
-    //        notificationIntent.SetAction(MainActivity.ActivityName);
-    //        notificationIntent.SetFlags(ActivityFlags.SingleTop | ActivityFlags.ClearTask);
-
-    //        var pendingIntent = PendingIntent.GetActivity(this, 0, notificationIntent, PendingIntentFlags.UpdateCurrent);
-    //        return pendingIntent;
-    //    }
-
-    //    public void OnLoadingChanged(bool p0)
-    //    {
-    //    }
-
-    //    public void OnPlaybackParametersChanged(PlaybackParameters p0)
-    //    {
-    //    }
-
-    //    public void OnPlayerError(ExoPlaybackException p0)
-    //    {
-    //    }
-
-    //    public void OnPlayerStateChanged(bool p0, int p1)
-    //    {
-    //    }
-
-    //    public void OnPositionDiscontinuity(int p0)
-    //    {
-    //    }
-
-    //    public void OnRepeatModeChanged(int p0)
-    //    {
-    //    }
-
-    //    public void OnSeekProcessed()
-    //    {
-    //    }
-
-    //    public void OnShuffleModeEnabledChanged(bool p0)
-    //    {
-    //    }
-
-    //    public void OnTimelineChanged(Timeline p0, Java.Lang.Object p1, int p2)
-    //    {
-    //    }
-
-    //    public void OnTracksChanged(TrackGroupArray p0, TrackSelectionArray p1)
-    //    {
-    //    }
-    //}
 }

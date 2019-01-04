@@ -42,28 +42,37 @@ namespace wzxv
                 uri = $"https://facebook.com/{id}/";
             }
 
-            var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(uri));
-            context.StartActivity(intent);
-
+            StartSocialActivity(context, uri);
             Events.ExternalLink(ExternalLinkType, uri);
         }
 
         public static void OpenTwitter(Context context, string id)
         {
             var uri = $"https://twitter.com/{id}/";
-            var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(uri));
-            context.StartActivity(intent);
-
+            StartSocialActivity(context, uri);
             Events.ExternalLink(ExternalLinkType, uri);
         }
 
         public static void OpenInstagram(Context context, string id)
         {
             var uri = $"https://instagram.com/{id}/";
-            var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(uri));
-            context.StartActivity(intent);
-
+            StartSocialActivity(context, uri);
             Events.ExternalLink(ExternalLinkType, uri);
+        }
+
+        private static void StartSocialActivity(Context context, string uri)
+        {
+            try
+            {
+                var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(uri));
+                context.StartActivity(intent);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(TAG, $"Unable to start activity '{uri}': {ex.Message}");
+                Log.Debug(TAG, ex.ToString());
+                Toast.MakeText(context, uri, ToastLength.Long).Show();
+            }
         }
     }
 }

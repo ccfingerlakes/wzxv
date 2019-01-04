@@ -199,16 +199,13 @@ namespace wzxv
 
         void SetVolumeBar(int volume)
         {
-            Controls.VolumeBar.Configure(volumeBar =>
+            if (Controls.VolumeControls.Visibility == Android.Views.ViewStates.Visible)
             {
-                if (volumeBar.Visibility == Android.Views.ViewStates.Visible)
+                RunOnUiThread(() =>
                 {
-                    RunOnUiThread(() =>
-                    {
-                        volumeBar.SetProgress(volume, false);
-                    });
-                }
-            });
+                    Controls.VolumeBar.SetProgress(volume, false);
+                });
+            }
         }
 
         void OnRadioStationMetadataChanged(object sender, RadioStationServiceMetadataChangedEventArgs e)

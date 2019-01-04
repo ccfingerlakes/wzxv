@@ -32,7 +32,7 @@ namespace wzxv
                 }
                 else
                 {
-                    uri = "fb://page/{id}";
+                    uri = $"fb://page/{id}";
                 }
             }
             catch (Exception ex)

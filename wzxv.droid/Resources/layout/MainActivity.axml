@@ -15,6 +15,7 @@
 			android:layout_height="16dp"
 			android:layout_weight="0" />
 		<ImageView
+			android:contentDescription="WZXV - The Word"
 			android:src="@drawable/logo"
 			android:layout_width="match_parent"
 			android:layout_height="128dp"
@@ -24,11 +25,11 @@
 			android:layout_width="match_parent"
 			android:layout_height="wrap_content"
 			android:textAlignment="center"
-			android:textSize="12dp"
+			android:textSize="14dp"
 			android:textColor="@android:color/white"
 			android:textStyle="bold"
 			android:shadowColor="@android:color/black"
-			android:shadowRadius="1"
+			android:shadowRadius="2"
 			android:shadowDx="1"
 			android:shadowDy="1" />
 	</LinearLayout>
@@ -39,6 +40,7 @@
 		android:layout_weight="1"
 		android:gravity="center">
 		<ImageView
+			android:contentDescription="Play"
 			android:src="@drawable/play"
 			android:layout_width="64dp"
 			android:layout_height="64dp"
@@ -52,21 +54,27 @@
 			android:gravity="center"
 			android:id="@+id/volumeControls" >
 			<ImageView
+			android:contentDescription="Mute"
 				android:src="@drawable/volume_min"
 				android:layout_width="32dp"
 				android:layout_height="32dp"
 				android:layout_weight="0"
-				android:alpha="0.8"
+				android:alpha="0.95"
 				android:id="@+id/volumeMinButton" />
 			<SeekBar
+				android:contentDescription="Change Volume"
+				android:progressTint="@android:color/holo_blue_light"
+				android:progressBackgroundTint="@android:color/white"
+				android:progress="50"
 				android:layout_width="fill_parent"
 				android:layout_height="wrap_content"
 				android:padding="16dp"
 				android:layout_weight="1"
 				android:id="@+id/volumeBar" />
 			<ImageView
+			android:contentDescription="Turn It Up Loud"
 				android:src="@drawable/volume_max"
-				android:alpha="0.8"
+				android:alpha="0.95"
 				android:layout_width="32dp"
 				android:layout_height="32dp"
 				android:layout_weight="0"
@@ -82,9 +90,10 @@
 			android:paddingRight="8dp"
 			android:gravity="top|center">
 			<ImageView
+				android:contentDescription="Now Playing"
 				android:src="@drawable/logo"
-				android:layout_width="64dp"
-				android:layout_height="64dp"
+				android:layout_width="96dp"
+				android:layout_height="96dp"
 				android:padding="2px"
 				android:background="@android:color/white"
 				android:id="@+id/coverImage" />
@@ -137,32 +146,36 @@
 			android:gravity="center"
 			android:layout_alignParentBottom="true">
 			<ImageView
+				android:contentDescription="Visit WZXV on the Web"
 				android:src="@drawable/wzxv"
-				android:layout_width="48dp"
-				android:layout_height="48dp"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
 				android:layout_weight="0"
-				android:padding="8dp"
+				android:layout_margin="8dp"
 				android:id="@+id/websiteButton" />
 			<ImageView
+				android:contentDescription="Visit WZXV on Facebook"
 				android:src="@drawable/facebook"
-				android:layout_width="48dp"
-				android:layout_height="48dp"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
 				android:layout_weight="0"
-				android:padding="8dp"
+				android:layout_margin="8dp"
 				android:id="@+id/facebookButton" />
 			<ImageView
+				android:contentDescription="Visit WZXV on Twitter"
 				android:src="@drawable/twitter"
-				android:layout_width="48dp"
-				android:layout_height="48dp"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
 				android:layout_weight="0"
-				android:padding="8dp"
+				android:layout_margin="8dp"
 				android:id="@+id/twitterButton" />
 			<ImageView
+				android:contentDescription="Visit WZXV on Instagram"
 				android:src="@drawable/instagram"
-				android:layout_width="48dp"
-				android:layout_height="48dp"
+				android:layout_width="40dp"
+				android:layout_height="40dp"
 				android:layout_weight="0"
-				android:padding="8dp"
+				android:layout_margin="8dp"
 				android:id="@+id/instagramButton" />
 		</LinearLayout>
 		<LinearLayout
@@ -175,51 +188,56 @@
 			android:minHeight="32dp"
 			android:layout_alignParentBottom="true">
 			<Space
-				android:layout_width="16dp"
+				android:layout_width="4dp"
 				android:layout_height="match_parent"
 				android:layout_weight="0" />
 			<ImageView
+				android:contentDescription="Call WZXV"
 				android:src="@drawable/phone"
-				android:layout_width="16dp"
-				android:layout_height="16dp"
+				android:layout_width="20dp"
+				android:layout_height="20dp"
 				android:layout_weight="0"
 				android:id="@+id/phoneButton" />
 			<TextView
 				android:text="(585) 398-3569"
 				android:textAppearance="?android:attr/textAppearanceSmall"
-				android:layout_width="wrap_content"
+				android:layout_width="118dp"
 				android:layout_height="wrap_content"
 				android:textColor="@color/tooltip_background_light"
-				android:textAlignment="center"
+				android:gravity="left"
 				android:textStyle="bold"
 				android:layout_weight="0"
-				android:padding="4dp"
+				android:textSize="12dp"
+				android:paddingLeft="2dp"
 				android:id="@+id/phoneLink" />
 			<ImageView
+				android:contentDescription="Visit WZXV"
 				android:src="@drawable/map"
-				android:layout_width="32dp"
-				android:layout_height="32dp"
+				android:layout_width="24dp"
+				android:layout_height="24dp"
 				android:layout_weight="1"
 				android:id="@+id/mapButton" />
-			<ImageView
-				android:src="@drawable/mail"
-				android:layout_width="16dp"
-				android:layout_height="16dp"
-				android:layout_weight="0"
-				android:id="@+id/mailButton" />
 			<TextView
 				android:text="manager@wzxv.org"
+				android:gravity="right"
 				android:textAppearance="?android:attr/textAppearanceSmall"
-				android:layout_width="wrap_content"
+				android:layout_width="118dp"
 				android:layout_height="wrap_content"
-				android:textAlignment="center"
+				android:textSize="12dp"
 				android:textStyle="bold"
+				android:paddingRight="2dp"
 				android:textColor="@color/tooltip_background_light"
 				android:layout_weight="0"
-				android:padding="4dp"
 				android:id="@+id/mailLink" />
+			<ImageView
+				android:contentDescription="Email WZXV"
+				android:src="@drawable/mail"
+				android:layout_width="20dp"
+				android:layout_height="20dp"
+				android:layout_weight="0"
+				android:id="@+id/mailButton" />
 			<Space
-				android:layout_width="16dp"
+				android:layout_width="4dp"
 				android:layout_height="match_parent"
 				android:layout_weight="0" />
 		</LinearLayout>

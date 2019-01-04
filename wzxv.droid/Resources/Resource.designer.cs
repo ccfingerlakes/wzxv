@@ -2654,11 +2654,11 @@ namespace wzxv
 			// aapt resource value: 0x7f090099
 			public const int logo = 2131296409;
 			
-			// aapt resource value: 0x7f0900a9
-			public const int mailButton = 2131296425;
-			
 			// aapt resource value: 0x7f0900aa
-			public const int mailLink = 2131296426;
+			public const int mailButton = 2131296426;
+			
+			// aapt resource value: 0x7f0900a9
+			public const int mailLink = 2131296425;
 			
 			// aapt resource value: 0x7f0900a8
 			public const int mapButton = 2131296424;

@@ -218,23 +218,37 @@ namespace wzxv
                 Controls.TitleLabel.Text = e.Title;
                 Controls.CoverImage.SetImageResource(Resource.Drawable.logo);
 
-                if (e.ImageUrl != null)
+                if (e.ImageUrl == null)
                 {
-                    try
+                    Controls.CoverImage.Configure(coverImage =>
                     {
-                        using (var response = _http.GetAsync(e.ImageUrl).Result)
+                        coverImage.SetImageResource(Resource.Drawable.logo);
+                        coverImage.ContentDescription = "Now Playing";
+                    });
+                }
+                else
+                {
+                    Controls.CoverImage.Configure(coverImage =>
+                    {
+                        coverImage.ContentDescription = $"Visit {e.Artist} on the Web";
+
+                        try
                         {
-                            if (response.IsSuccessStatusCode)
+                            using (var response = _http.GetAsync(e.ImageUrl).Result)
                             {
-                                Controls.CoverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
+                                if (response.IsSuccessStatusCode)
+                                {
+                                    coverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
+                                }
                             }
                         }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warn(TAG, $"Failed to retrieve metadata image url '{e.ImageUrl}': {ex.Message}");
-                        Log.Debug(TAG, ex.ToString());
-                    }
+                        catch (Exception ex)
+                        {
+                            Log.Warn(TAG, $"Failed to retrieve metadata image url '{e.ImageUrl}': {ex.Message}");
+                            Log.Debug(TAG, ex.ToString());
+                            coverImage.SetImageResource(Resource.Drawable.logo);
+                        }
+                    });
                 }
             });
         }
@@ -245,12 +259,20 @@ namespace wzxv
             {
                 if (_service.Service.IsPlaying)
                 {
-                    Controls.MediaButton.SetImageResource(Resource.Drawable.pause);
+                    Controls.MediaButton.Configure(mediaButton =>
+                    {
+                        mediaButton.SetImageResource(Resource.Drawable.pause);
+                        mediaButton.ContentDescription = "Pause";
+                    });
                     Events.Playing();
                 }
                 else
                 {
-                    Controls.MediaButton.SetImageResource(Resource.Drawable.play);
+                    Controls.MediaButton.Configure(mediaButton =>
+                    {
+                        mediaButton.SetImageResource(Resource.Drawable.play);
+                        mediaButton.ContentDescription = "Play";
+                    });
                     Events.Stopped();
                 }
 

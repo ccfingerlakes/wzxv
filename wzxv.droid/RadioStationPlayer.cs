@@ -19,11 +19,12 @@ using Com.Google.Android.Exoplayer2.Util;
 
 namespace wzxv
 {
-    class RadioStationPlayer : Java.Lang.Object, IDisposable, IPlayerEventListener, AudioManager.IOnAudioFocusChangeListener
+    class RadioStationPlayer : Java.Lang.Object, IPlayerEventListener, AudioManager.IOnAudioFocusChangeListener
     {
         private const string TAG = "wzxv.app.radio.player";
         private const string StreamUrl = "http://ic2.christiannetcast.com/wzxv-fm";
 
+        private readonly object _syncRoot = new object();
         private readonly Context _context;
         private readonly AudioManager _audioManager;
         private SimpleExoPlayer _player;
@@ -45,45 +46,51 @@ namespace wzxv
             base.Dispose(disposing);
         }
 
-        public void Start()
+        public async Task Start()
         {
             if (_player != null)
             {
-                Stop();
+                await Stop();
             }
 
-            var defaultBandwidthMeter = new DefaultBandwidthMeter();
-            var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory(defaultBandwidthMeter);
-            var defaultTrackSelector = new DefaultTrackSelector(adaptiveTrackSelectionFactory);
-
-            _player = ExoPlayerFactory.NewSimpleInstance(_context, defaultTrackSelector);
-            _player.AddListener(this);
-            _player.PlayWhenReady = true;
-
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+            await Task.Run(() =>
             {
-                var audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
-                                                    .SetOnAudioFocusChangeListener(this)
-                                                    .SetAudioAttributes(new AudioAttributes.Builder()
-                                                        .SetUsage(AudioUsageKind.Media)
-                                                        .SetContentType(AudioContentType.Music)
-                                                        .Build())
-                                                    .Build();
+                lock (_syncRoot)
+                {
+                    var defaultBandwidthMeter = new DefaultBandwidthMeter();
+                    var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory(defaultBandwidthMeter);
+                    var defaultTrackSelector = new DefaultTrackSelector(adaptiveTrackSelectionFactory);
 
-                if (_audioManager.RequestAudioFocus(audioFocusRequest) == AudioFocusRequest.Granted)
-                {
-                    play();
+                    _player = ExoPlayerFactory.NewSimpleInstance(_context, defaultTrackSelector);
+                    _player.AddListener(this);
+                    _player.PlayWhenReady = true;
+
+                    if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+                    {
+                        var audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
+                                                            .SetOnAudioFocusChangeListener(this)
+                                                            .SetAudioAttributes(new AudioAttributes.Builder()
+                                                                .SetUsage(AudioUsageKind.Media)
+                                                                .SetContentType(AudioContentType.Music)
+                                                                .Build())
+                                                            .Build();
+
+                        if (_audioManager.RequestAudioFocus(audioFocusRequest) == AudioFocusRequest.Granted)
+                        {
+                            play();
+                        }
+                    }
+                    else
+                    {
+                        #pragma warning disable CS0618 // Type or member is obsolete
+                        if (_audioManager.RequestAudioFocus(this, Stream.Music, AudioFocus.Gain) == AudioFocusRequest.Granted)
+                        {
+                            play();
+                        }
+                        #pragma warning restore CS0618 // Type or member is obsolete
+                    }
                 }
-            }
-            else
-            {
-                #pragma warning disable CS0618 // Type or member is obsolete
-                if (_audioManager.RequestAudioFocus(this, Stream.Music, AudioFocus.Gain) == AudioFocusRequest.Granted)
-                {
-                    play();
-                }
-                #pragma warning restore CS0618 // Type or member is obsolete
-            }
+            });
 
             void play()
             {
@@ -98,17 +105,22 @@ namespace wzxv
             }
         }
 
-        public void Stop()
+        public async Task Stop()
         {
-            if (_player != null)
+            await Task.Run(() =>
             {
-                _player.RemoveListener(this);
-                _player.Stop();
-                _player.Release();
-                _player = null;
+                lock (_syncRoot)
+                {
+                    if (_player != null)
+                    {
+                        _player.RemoveListener(this);
+                        _player.Release();
+                        _player = null;
 
-                StateChanged?.Invoke(this, EventArgs.Empty);
-            }
+                        StateChanged?.Invoke(this, EventArgs.Empty);
+                    }
+                }
+            });
         }
 
         private int? _previousAudioVolume = null;
@@ -144,10 +156,7 @@ namespace wzxv
         {
             Log.Error(TAG, $"Player error occurred, see debug log for full details");
             Log.Debug(TAG, e.ToString());
-
-            Stop();
-
-            Error?.Invoke(this, new RadioStationErrorEventArgs(e));
+            Task.Run(() => Error?.Invoke(this, new RadioStationErrorEventArgs(e)));
         }
 
         void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)

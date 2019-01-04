@@ -13,12 +13,14 @@ using Microsoft.AppCenter;
 using Microsoft.AppCenter.Analytics;
 using Microsoft.AppCenter.Crashes;
 using System.Collections.Generic;
+using Android.Util;
 
 namespace wzxv
 {
     [Activity(Name = ActivityName, Label = "@string/app_name", Theme = "@style/SplashScreen", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize, ScreenOrientation = ScreenOrientation.Portrait)]
     public class MainActivity : AppCompatActivity
     {
+        public const string TAG = "wzxv.app.main";
         public const string ActivityName = "wzxv.app.main";
 
         private RadioStationServiceBinder _service;
@@ -42,7 +44,7 @@ namespace wzxv
             
             base.OnCreate(savedInstanceState);
             
-            SetContentView(Resource.Layout.Main);
+            SetContentView(Resource.Layout.MainActivity);
 
             if (_service == null)
             {
@@ -75,7 +77,7 @@ namespace wzxv
                     volumeBar.ProgressChanged += OnVolumeChanged;
                 });
 
-                _volumeRefresh.Elapsed += (_, __) => OnRefresh();
+                _volumeRefresh.Elapsed += (_, __) => OnVolumeRefresh();
                 _volumeRefresh.Start();
             }
 
@@ -171,7 +173,7 @@ namespace wzxv
         {
             var max = _audioManager.GetStreamMaxVolume(Stream.Music);
             _audioManager.SetStreamVolume(Stream.Music, max, VolumeNotificationFlags.RemoveSoundAndVibrate);
-            OnRefresh();
+            OnVolumeRefresh();
         }
 
         void OnVolumeChanged(object sender, SeekBar.ProgressChangedEventArgs e)
@@ -181,6 +183,8 @@ namespace wzxv
 
         void OnPlayButtonClick(object sender, EventArgs e)
         {
+            Controls.PlayButton.Enabled = false;
+
             if (_service.Service.IsPlaying)
             {
                 _service.Service.Stop();
@@ -203,7 +207,7 @@ namespace wzxv
             }
         }
 
-        void OnRefresh()
+        void OnVolumeRefresh()
         {
             if (Build.VERSION.SdkInt >= BuildVersionCodes.N)
             {
@@ -235,8 +239,10 @@ namespace wzxv
                             }
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        Log.Warn(TAG, $"Failed to retrieve metadata image url '{e.ImageUrl}': {ex.Message}");
+                        Log.Debug(TAG, ex.ToString());
                     }
                 }
             });
@@ -256,13 +262,16 @@ namespace wzxv
                     Controls.PlayButton.SetImageResource(Resource.Drawable.play);
                     AppCenterEvents.Stopped();
                 }
+
+                Controls.PlayButton.Enabled = true;
             });
         }
 
         void OnRadioStationError(object sender, RadioStationErrorEventArgs e)
         {
+            Crashes.TrackError(e.Exception);
             AppCenterEvents.Error(e.Exception);
-            RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word was interrupted", ToastLength.Long).Show());
+            RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word is having \"issues\"... :(", ToastLength.Long).Show());
         }
 
         class AudioPlayerServiceConnection : Java.Lang.Object, IServiceConnection

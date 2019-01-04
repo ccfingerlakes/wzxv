@@ -19,7 +19,7 @@ namespace wzxv
     public class RadioStationSchedule : IDisposable
     {
         private const string TAG = "wzxv.app.radio.schedule";
-        private const string SlotsUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
+        private const string ScheduleUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
         private const string ArtistsUrl = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/android/artists.csv";
 
         private readonly object _syncRoot = new object();
@@ -154,7 +154,7 @@ namespace wzxv
                     {
                         try
                         {
-                            using (var response = await client.GetAsync(SlotsUrl))
+                            using (var response = await client.GetAsync(ScheduleUrl))
                             {
                                 if (response.IsSuccessStatusCode)
                                 {
@@ -164,7 +164,7 @@ namespace wzxv
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(TAG, $"Failed to retrieve slots metadata: {ex.Message}");
+                            Log.Error(TAG, $"Failed to retrieve schedule metadata: {ex.Message}");
                             Log.Debug(TAG, ex.ToString());
                         }
                     }),
@@ -182,7 +182,7 @@ namespace wzxv
                         }
                         catch (Exception ex)
                         {
-                            Log.Error(TAG, $"Failed to retrieve slots metadata: {ex.Message}");
+                            Log.Error(TAG, $"Failed to retrieve artists metadata: {ex.Message}");
                             Log.Debug(TAG, ex.ToString());
                         }
                     })

@@ -3134,7 +3134,7 @@ namespace wzxv
 			public const int design_text_input_password_icon = 2130968615;
 			
 			// aapt resource value: 0x7f040028
-			public const int Main = 2130968616;
+			public const int MainActivity = 2130968616;
 			
 			// aapt resource value: 0x7f040029
 			public const int notification_action = 2130968617;

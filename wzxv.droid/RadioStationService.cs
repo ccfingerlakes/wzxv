@@ -26,12 +26,12 @@ namespace wzxv
     [IntentFilter(new [] {  ActionPlay, ActionStop })]
     public class RadioStationService : Service
     {
-        private const string TAG = "wzxv.app.radio";
-        private const int NotificationId = 1;
-        
         public const string ActionPlay = "wzxv.app.radio.PLAY";
         public const string ActionStop = "wzxv.app.radio.STOP";
         public const string ActionToggle = "wzxv.app.radio.TOGGLE";
+
+        private const string TAG = "wzxv.app.radio";
+        private const int NotificationId = 1;
 
         private RadioStationPlayer _player;
         private RadioStationNotificationManager _notificationManager;
@@ -40,12 +40,12 @@ namespace wzxv
         private RadioStationServiceLock _lock;
         private RadioStationServiceBinder _binder;
 
-        public bool IsStarted { get; private set; } = false;
-        public bool IsPlaying => _player != null && _player.IsPlaying;
-
         public event EventHandler<RadioStationServiceMetadataChangedEventArgs> MetadataChanged;
         public event EventHandler StateChanged;
         public event EventHandler<RadioStationErrorEventArgs> Error;
+
+        public bool IsStarted { get; private set; } = false;
+        public bool IsPlaying => _player != null && _player.IsPlaying;
 
         public override void OnCreate()
         {
@@ -161,8 +161,10 @@ namespace wzxv
                     _lock = null;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Error(TAG, $"Error during stop: {ex.Message}");
+                Log.Debug(TAG, ex.ToString());
                 force = true;
             }
             finally
@@ -189,10 +191,7 @@ namespace wzxv
 
         void OnPlayerError(object sender, RadioStationErrorEventArgs e)
         {
-            Stop();
-
-            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);
-            
+            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);            
             Error?.Invoke(this, e);
         }
 

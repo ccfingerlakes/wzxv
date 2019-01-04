@@ -42,7 +42,7 @@ namespace wzxv
 
         protected override void Dispose(bool disposing)
         {
-            Stop();
+            Stop().Wait();
             base.Dispose(disposing);
         }
 
@@ -50,7 +50,7 @@ namespace wzxv
         {
             if (_player != null)
             {
-                await Stop();
+                await Stop().ConfigureAwait(false);
             }
 
             await Task.Run(() =>
@@ -90,7 +90,7 @@ namespace wzxv
                         #pragma warning restore CS0618 // Type or member is obsolete
                     }
                 }
-            });
+            }).ConfigureAwait(false);
 
             void play()
             {
@@ -120,7 +120,7 @@ namespace wzxv
                         StateChanged?.Invoke(this, EventArgs.Empty);
                     }
                 }
-            });
+            }).ConfigureAwait(false);
         }
 
         private int? _previousAudioVolume = null;
@@ -156,7 +156,7 @@ namespace wzxv
         {
             Log.Error(TAG, $"Player error occurred, see debug log for full details");
             Log.Debug(TAG, e.ToString());
-            Task.Run(() => Error?.Invoke(this, new RadioStationErrorEventArgs(e)));
+            Task.Run(() => Error?.Invoke(this, new RadioStationErrorEventArgs(e))).ConfigureAwait(false);
         }
 
         void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)

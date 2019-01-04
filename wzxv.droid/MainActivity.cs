@@ -14,6 +14,7 @@ using Microsoft.AppCenter.Analytics;
 using Microsoft.AppCenter.Crashes;
 using System.Collections.Generic;
 using Android.Util;
+using Android.Arch.Lifecycle;
 
 namespace wzxv
 {
@@ -24,8 +25,8 @@ namespace wzxv
         public const string ActivityName = "wzxv.app.main";
 
         private RadioStationServiceBinder _service;
+        private AudioVolumeObserver _volumeObserver;
         private string _metadataUrl = null;
-        private readonly Timer _volumeRefresh = new Timer(1000);
         private readonly HttpClient _http = new HttpClient();
         
         private AudioManager _audioManager;
@@ -38,6 +39,7 @@ namespace wzxv
 
             _audioManager = (AudioManager)GetSystemService(AudioService);
             _networkStatus = new NetworkStatus(ApplicationContext, connected: OnNetworkConnected, disconnected: OnNetworkDisconnected);
+            _volumeObserver = new AudioVolumeObserver(this, new Handler(), SetVolumeBar);
 
             base.Window.RequestFeature(Android.Views.WindowFeatures.ActionBar);
             base.SetTheme(Resource.Style.AppTheme);
@@ -74,121 +76,51 @@ namespace wzxv
                 {
                     volumeBar.Max = _audioManager.GetStreamMaxVolume(Stream.Music);
                     volumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), true);
-                    volumeBar.ProgressChanged += OnVolumeChanged;
+                    volumeBar.ProgressChanged += OnVolumeBarChanged;
                 });
-
-                _volumeRefresh.Elapsed += (_, __) => OnVolumeRefresh();
-                _volumeRefresh.Start();
             }
 
-            Controls.CoverImage.Click += (_, __) =>
-            {
-                if (_metadataUrl != null)
-                    LaunchBrowser(_metadataUrl);
-            };
+            Controls.CoverImage.Click += OnCoverImageClick;
+            Controls.MediaButton.Click += OnPlayButtonClick;
 
-            Controls.PlayButton.Click += OnPlayButtonClick;
-
-            Controls.WebsiteButton.Click += (_, __) => LaunchBrowser("http://wzxv.org");
-            Controls.FacebookButton.Click += (_, __) => LaunchBrowser("https://www.facebook.com/WZXVTheWord/");
-            Controls.TwitterButton.Click += (_, __) => LaunchBrowser("https://twitter.com/wzxvtheword");
-            Controls.InstagramButton.Click += (_, __) => LaunchBrowser("https://www.instagram.com/wzxvtheword/");
+            Controls.WebsiteButton.Click += (_, __) => OpenBrowser("http://wzxv.org");
+            Controls.FacebookButton.Click += (_, __) => SocialConnector.OpenFacebook(this, "WZXVTheWord");
+            Controls.TwitterButton.Click += (_, __) => SocialConnector.OpenTwitter(this, "wzxvtheword");
+            Controls.InstagramButton.Click += (_, __) => SocialConnector.OpenInstagram(this, "wzxvtheword");
 
             if (PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
             {
-                Controls.PhoneButton.Click += (_, __) => DialNumber("5853983569");
-                Controls.PhoneLink.Click += (_, __) => DialNumber("5853983569");
+                Controls.PhoneButton.Click += (_, __) => ContactConnector.OpenDialer(this, "5853983569");
+                Controls.PhoneLink.Click += (_, __) => ContactConnector.OpenDialer(this, "5853983569");
             }
 
-            Controls.MapButton.Click += (_, __) => ShowMap(42.9465473, -77.3333895);
+            Controls.MapButton.Click += (_, __) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);
 
-            Controls.MailButton.Click += (_, __) => SendMail("manager@wzxv.org");
-            Controls.MailLink.Click += (_, __) => SendMail("manager@wzxv.org");
+            Controls.MailButton.Click += (_, __) => ContactConnector.OpenMail(this, "manager@wzxv.org");
+            Controls.MailLink.Click += (_, __) => ContactConnector.OpenMail(this, "manager@wzxv.org");
         }
 
         protected override void OnDestroy()
         {
-            base.OnDestroy();
-            _volumeRefresh.Dispose();
-        }
-
-        void OnNetworkConnected()
-        {
-            RunOnUiThread(() => Controls.PlayButton.Configure(playButton =>
-                {
-                    playButton.Alpha = 1.0f;
-                    playButton.Clickable = true;
-                }));
-        }
-
-        void OnNetworkDisconnected()
-        {
-            if (_service != null && _service.Service.IsPlaying)
+            if (_volumeObserver != null)
             {
-                _service.Service.Stop();
+                _volumeObserver.Dispose();
+                _volumeObserver = null;
             }
 
-            RunOnUiThread(() => Controls.PlayButton.Configure(playButton =>
-            {
-                playButton.Alpha = 0.6f;
-                playButton.Clickable = false;
-            }));
-        }
+            Controls.Register(null);
 
-        void LaunchBrowser(string url)
-        {
-            var uri = Android.Net.Uri.Parse(url);
-            var intent = new Intent(Intent.ActionView, uri);
-            StartActivity(intent);
-        }
-
-        void DialNumber(string number)
-        {
-            var uri = Android.Net.Uri.Parse($"tel:{number}");
-            var intent = new Intent(Intent.ActionDial, uri);
-            StartActivity(intent);
-        }
-
-        void ShowMap(double latitude, double longitude)
-        {
-            var uri = Android.Net.Uri.Parse($"geo:{latitude},{longitude}?q=Calvary Chapel of the Finger Lakes, 1777 Rochester Rd, Farmington NY 14425");
-            var intent = new Intent(Intent.ActionView, uri);
-            StartActivity(intent);
-        }
-
-        void SendMail(string to)
-        {
-            var intent = new Intent(Intent.ActionSend)
-                            .PutExtra(Android.Content.Intent.ExtraEmail, new[] { to })
-                            .SetType("message/rfc822");
-            StartActivity(intent);
-        }
-
-        void OnVolumeMinButtonClick(object sender, EventArgs e)
-        {
-            _audioManager.SetStreamVolume(Stream.Music, 0, VolumeNotificationFlags.RemoveSoundAndVibrate);
-        }
-
-        void OnVolumeMaxButtonClick(object sender, EventArgs e)
-        {
-            var max = _audioManager.GetStreamMaxVolume(Stream.Music);
-            _audioManager.SetStreamVolume(Stream.Music, max, VolumeNotificationFlags.RemoveSoundAndVibrate);
-            OnVolumeRefresh();
-        }
-
-        void OnVolumeChanged(object sender, SeekBar.ProgressChangedEventArgs e)
-        {
-            _audioManager.SetStreamVolume(Stream.Music, e.Progress, VolumeNotificationFlags.RemoveSoundAndVibrate);
+            base.OnDestroy();
         }
 
         void OnPlayButtonClick(object sender, EventArgs e)
         {
-            Controls.PlayButton.Enabled = false;
+            Events.Click("Media Button", new { _service.Service.IsPlaying });
+            Controls.MediaButton.Enabled = false;
 
             if (_service.Service.IsPlaying)
             {
                 _service.Service.Stop();
-                AppCenterEvents.Stop();
             }
             else
             {
@@ -202,29 +134,91 @@ namespace wzxv
                 {
                     StartService(intent);
                 }
-
-                AppCenterEvents.Play();
             }
         }
 
-        void OnVolumeRefresh()
+        void OnCoverImageClick(object sender, EventArgs e)
         {
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.N)
+            if (_metadataUrl != null)
             {
-                RunOnUiThread(() =>
-                {
-                    Controls.VolumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
-                });
+                var uri = Android.Net.Uri.Parse(_metadataUrl);
+                var intent = new Intent(Intent.ActionView, uri);
+                StartActivity(intent);
+                Events.Click("Cover", new { Url = _metadataUrl });
             }
+        }
+
+        void OnNetworkConnected()
+        {
+            RunOnUiThread(() => Controls.MediaButton.Configure(playButton =>
+                {
+                    playButton.Alpha = 1.0f;
+                    playButton.Clickable = true;
+                }));
+        }
+
+        void OnNetworkDisconnected()
+        {
+            if (_service != null && _service.Service.IsPlaying)
+            {
+                _service.Service.Stop();
+            }
+
+            RunOnUiThread(() => Controls.MediaButton.Configure(playButton =>
+            {
+                playButton.Alpha = 0.6f;
+                playButton.Clickable = false;
+                Toast.MakeText(this, "The network connection has been lost", ToastLength.Long);
+            }));
+        }
+
+        void OpenBrowser(string url)
+        {
+            var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(url));
+            StartActivity(intent);
+            Events.ExternalLink("Browser", url);
+        }
+
+        void OnVolumeMinButtonClick(object sender, EventArgs e)
+        {
+            _audioManager.SetStreamVolume(Stream.Music, 0, VolumeNotificationFlags.RemoveSoundAndVibrate);
+            SetVolumeBar(0);
+        }
+
+        void OnVolumeMaxButtonClick(object sender, EventArgs e)
+        {
+            var max = _audioManager.GetStreamMaxVolume(Stream.Music);
+            _audioManager.SetStreamVolume(Stream.Music, max, VolumeNotificationFlags.RemoveSoundAndVibrate);
+            SetVolumeBar(max);
+        }
+
+        void OnVolumeBarChanged(object sender, SeekBar.ProgressChangedEventArgs e)
+        {
+            _audioManager.SetStreamVolume(Stream.Music, e.Progress, VolumeNotificationFlags.RemoveSoundAndVibrate);
+        }
+
+        void SetVolumeBar(int volume)
+        {
+            Controls.VolumeBar.Configure(volumeBar =>
+            {
+                if (volumeBar.Visibility == Android.Views.ViewStates.Visible)
+                {
+                    RunOnUiThread(() =>
+                    {
+                        volumeBar.SetProgress(volume, false);
+                    });
+                }
+            });
         }
 
         void OnRadioStationMetadataChanged(object sender, RadioStationServiceMetadataChangedEventArgs e)
         {
             RunOnUiThread(() =>
             {
+                _metadataUrl = e.Url;
+
                 Controls.ArtistLabel.Text = e.Artist;
                 Controls.TitleLabel.Text = e.Title;
-                _metadataUrl = e.Url;
                 Controls.CoverImage.SetImageResource(Resource.Drawable.logo);
 
                 if (e.ImageUrl != null)
@@ -254,23 +248,23 @@ namespace wzxv
             {
                 if (_service.Service.IsPlaying)
                 {
-                    Controls.PlayButton.SetImageResource(Resource.Drawable.pause);
-                    AppCenterEvents.Playing();
+                    Controls.MediaButton.SetImageResource(Resource.Drawable.pause);
+                    Events.Playing();
                 }
                 else
                 {
-                    Controls.PlayButton.SetImageResource(Resource.Drawable.play);
-                    AppCenterEvents.Stopped();
+                    Controls.MediaButton.SetImageResource(Resource.Drawable.play);
+                    Events.Stopped();
                 }
 
-                Controls.PlayButton.Enabled = true;
+                Controls.MediaButton.Enabled = true;
             });
         }
 
         void OnRadioStationError(object sender, RadioStationErrorEventArgs e)
         {
             Crashes.TrackError(e.Exception);
-            AppCenterEvents.Error(e.Exception);
+            Events.Error(e.Exception);
             RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word is having \"issues\"... :(", ToastLength.Long).Show());
         }
 
@@ -322,7 +316,7 @@ namespace wzxv
             public static TextView ArtistLabel => __activity?.FindViewById<TextView>(Resource.Id.artistLabel);
             public static TextView TitleLabel => __activity?.FindViewById<TextView>(Resource.Id.titleLabel);
             public static ImageView CoverImage => __activity?.FindViewById<ImageView>(Resource.Id.coverImage);
-            public static ImageView PlayButton => __activity?.FindViewById<ImageView>(Resource.Id.playButton);
+            public static ImageView MediaButton => __activity?.FindViewById<ImageView>(Resource.Id.mediaButton);
             public static LinearLayout VolumeControls => __activity?.FindViewById<LinearLayout>(Resource.Id.volumeControls);
         }
     }

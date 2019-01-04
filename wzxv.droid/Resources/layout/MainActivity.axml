@@ -42,7 +42,7 @@
 			android:src="@drawable/play"
 			android:layout_width="64dp"
 			android:layout_height="64dp"
-			android:id="@+id/playButton" />
+			android:id="@+id/mediaButton" />
 		<LinearLayout
 			android:orientation="horizontal"
 			android:layout_width="match_parent"

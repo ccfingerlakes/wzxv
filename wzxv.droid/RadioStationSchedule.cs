@@ -58,7 +58,7 @@ namespace wzxv
                 }
 
                 _timer.Stop();
-                _timer.Interval = 100;
+                _timer.Interval = 250;
                 _timer.Start();
             }
         }

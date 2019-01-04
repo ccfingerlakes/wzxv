@@ -2666,6 +2666,9 @@ namespace wzxv
 			// aapt resource value: 0x7f0900c0
 			public const int masked = 2131296448;
 			
+			// aapt resource value: 0x7f09009a
+			public const int mediaButton = 2131296410;
+			
 			// aapt resource value: 0x7f0900b1
 			public const int media_actions = 2131296433;
 			
@@ -2719,9 +2722,6 @@ namespace wzxv
 			
 			// aapt resource value: 0x7f09004d
 			public const int pin = 2131296333;
-			
-			// aapt resource value: 0x7f09009a
-			public const int playButton = 2131296410;
 			
 			// aapt resource value: 0x7f090006
 			public const int progress_circular = 2131296262;

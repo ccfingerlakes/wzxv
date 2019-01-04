@@ -154,12 +154,6 @@ namespace wzxv
                 {
                     _player.Stop();
                 }
-
-                if (_lock != null)
-                {
-                    _lock.Release();
-                    _lock = null;
-                }
             }
             catch (Exception ex)
             {
@@ -169,7 +163,15 @@ namespace wzxv
             }
             finally
             {
-                StopForeground(true);
+                IsStarted = false;
+
+                if (_lock != null)
+                {
+                    _lock.Release();
+                    _lock = null;
+                }
+
+                StopForeground(force);
             }
         }
 
@@ -191,7 +193,8 @@ namespace wzxv
 
         void OnPlayerError(object sender, RadioStationErrorEventArgs e)
         {
-            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);            
+            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);
+            Stop();
             Error?.Invoke(this, e);
         }
 

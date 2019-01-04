@@ -20,7 +20,7 @@ namespace wzxv
     {
         private const string TAG = "wzxv.app.radio.schedule";
         private const string ScheduleUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
-        private const string ArtistsUrl = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/android/artists.csv";
+        private const string ArtistsUrl = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/master/artists.csv";
 
         private readonly object _syncRoot = new object();
         private readonly TimeZoneInfo _est = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");

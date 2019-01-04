@@ -24,18 +24,16 @@ namespace wzxv
 {
     [Service(Name = "wzxv.app.radio")]
     [IntentFilter(new [] {  ActionPlay, ActionStop })]
-    public class RadioStationService : Service, IPlayerEventListener, AudioManager.IOnAudioFocusChangeListener
+    public class RadioStationService : Service
     {
         private const string TAG = "wzxv.app.radio";
         private const int NotificationId = 1;
-        private const string StreamUrl = "http://ic2.christiannetcast.com/wzxv-fm";
         
         public const string ActionPlay = "wzxv.app.radio.PLAY";
         public const string ActionStop = "wzxv.app.radio.STOP";
         public const string ActionToggle = "wzxv.app.radio.TOGGLE";
 
-        private SimpleExoPlayer _player;
-        private AudioManager _audioManager;
+        private RadioStationPlayer _player;
         private RadioStationNotificationManager _notificationManager;
         private RadioStationMediaSession _mediaSession;
         private RadioStationSchedule _schedule;
@@ -43,18 +41,21 @@ namespace wzxv
         private RadioStationServiceBinder _binder;
 
         public bool IsStarted { get; private set; } = false;
-        public bool IsPlaying => _player != null && _player.PlayWhenReady == true && _player.PlaybackState == Player.StateReady;
+        public bool IsPlaying => _player != null && _player.IsPlaying;
 
-        public event EventHandler<RadioStationServiceMetadataChangedEventArgs> Metadata;
+        public event EventHandler<RadioStationServiceMetadataChangedEventArgs> MetadataChanged;
         public event EventHandler StateChanged;
-        public event EventHandler<RadioStationServiceErrorEventArgs> Error;
+        public event EventHandler<RadioStationErrorEventArgs> Error;
 
         public override void OnCreate()
         {
             base.OnCreate();
-            _audioManager = (AudioManager)GetSystemService(AudioService);
-            _notificationManager = new RadioStationNotificationManager(ApplicationContext);
+            _mediaSession = new RadioStationMediaSession(this);
+            _notificationManager = new RadioStationNotificationManager(this);
             _schedule = new RadioStationSchedule(OnScheduleChanged);
+            _player = new RadioStationPlayer(this);
+            _player.StateChanged += OnPlayerStateChanged;
+            _player.Error += OnPlayerError;
         }
 
         public override IBinder OnBind(Intent intent)
@@ -67,22 +68,16 @@ namespace wzxv
         {
             base.OnDestroy();
 
+            if (_player != null)
+            {
+                _player.Dispose();
+                _player = null;
+            }
+
             if (_schedule != null)
             {
                 _schedule.Dispose();
                 _schedule = null;
-            }
-
-            if (_player != null)
-            {
-                _player.Release();
-                _player = null;
-            }
-
-            if (_mediaSession != null)
-            {
-                _mediaSession.Dispose();
-                _mediaSession = null;
             }
 
             if (_notificationManager != null)
@@ -91,13 +86,11 @@ namespace wzxv
                 _notificationManager = null;
             }
 
-            if (_lock != null)
+            if (_mediaSession != null)
             {
-                _lock.Dispose();
-                _lock = null;
+                _mediaSession.Dispose();
+                _mediaSession = null;
             }
-
-            StopForeground(true);
         }
 
         public override StartCommandResult OnStartCommand(Intent intent, StartCommandFlags flags, int startId)
@@ -131,58 +124,10 @@ namespace wzxv
         {
             if (!IsPlaying)
             {
-                if (_player == null)
-                {
-                    var defaultBandwidthMeter = new DefaultBandwidthMeter();
-                    var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory(defaultBandwidthMeter);
-                    var defaultTrackSelector = new DefaultTrackSelector(adaptiveTrackSelectionFactory);
-
-                    _player = ExoPlayerFactory.NewSimpleInstance(this, defaultTrackSelector);
-                    _player.AddListener(this);
-                    _player.PlayWhenReady = true;
-                }
-
-                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
-                {
-                    var audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
-                                                        .SetOnAudioFocusChangeListener(this)
-                                                        .SetAudioAttributes(new AudioAttributes.Builder()
-                                                            .SetUsage(AudioUsageKind.Media)
-                                                            .SetContentType(AudioContentType.Music)
-                                                            .Build())
-                                                        .Build();
-
-                    if (_audioManager.RequestAudioFocus(audioFocusRequest) == AudioFocusRequest.Granted)
-                    {
-                        play();
-                    }
-                }
-                else
-                {
-                    #pragma warning disable CS0618 // Type or member is obsolete
-                    if (_audioManager.RequestAudioFocus(this, Stream.Music, AudioFocus.Gain) == AudioFocusRequest.Granted)
-                    {
-                        play();
-                    }
-                    #pragma warning restore CS0618 // Type or member is obsolete
-                }
-            }
-
-            void play()
-            {
                 try
                 {
-                    _mediaSession = new RadioStationMediaSession(ApplicationContext);
-                    _lock = new RadioStationServiceLock(ApplicationContext);
-
-                    var mediaUri = Android.Net.Uri.Parse(StreamUrl);
-                    var userAgent = Util.GetUserAgent(this, "wzxv.app");
-                    var defaultHttpDataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
-                    var defaultDataSourceFactory = new DefaultDataSourceFactory(this, null, defaultHttpDataSourceFactory);
-                    var mediaSourceFactory = new ExtractorMediaSource.Factory(defaultDataSourceFactory);
-                    var mediaSource = mediaSourceFactory.CreateMediaSource(mediaUri);
-
-                    _player.Prepare(mediaSource);
+                    _lock = new RadioStationServiceLock(this);
+                    _player.Start();
                     _schedule.Refresh(force: true);
                 }
                 catch (Exception ex)
@@ -190,45 +135,65 @@ namespace wzxv
                     Log.Error(TAG, $"Failed to play: {ex.Message}");
                     Log.Debug(TAG, ex.ToString());
 
-                    if (_mediaSession != null)
-                    {
-                        _mediaSession.Dispose();
-                        _mediaSession = null;
-                    }
-
                     if (_lock != null)
                     {
-                        _lock.Dispose();
+                        _lock.Release();
                         _lock = null;
                     }
 
-                    Error?.Invoke(this, new RadioStationServiceErrorEventArgs(ex));
-
-                    throw;
+                    Error?.Invoke(this, new RadioStationErrorEventArgs(ex));
                 }
             }
         }
 
-        public void Stop()
+        public void Stop(bool force = false)
         {
-            if (IsPlaying)
+            try
             {
-                _player.Stop();
-                _notificationManager.Stop();
+                if (IsPlaying)
+                {
+                    _player.Stop();
+                }
+
+                if (_lock != null)
+                {
+                    _lock.Release();
+                    _lock = null;
+                }
+            }
+            catch
+            {
+                force = true;
+            }
+            finally
+            {
                 StopForeground(true);
             }
+        }
 
-            if (_lock != null)
+        void OnPlayerStateChanged(object sender, EventArgs e)
+        {
+            if (_player.IsPlaying)
             {
-                _lock.Dispose();
-                _lock = null;
+                _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying);
+            }
+            else
+            {
+                _mediaSession.SetPlaybackState(PlaybackStateCompat.StateStopped);
             }
 
-            if (_mediaSession != null)
-            {
-                _mediaSession.Dispose();
-                _mediaSession = null;
-            }
+            UpdateNotification();
+
+            StateChanged?.Invoke(this, e);
+        }
+
+        void OnPlayerError(object sender, RadioStationErrorEventArgs e)
+        {
+            Stop();
+
+            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);
+            
+            Error?.Invoke(this, e);
         }
 
         private RadioStationSchedule.Slot _slot;
@@ -247,7 +212,7 @@ namespace wzxv
                 });
             }
 
-            Metadata?.Invoke(this, new RadioStationServiceMetadataChangedEventArgs(slot.Artist, slot.Title, slot.Url, slot.ImageUrl));
+            MetadataChanged?.Invoke(this, new RadioStationServiceMetadataChangedEventArgs(slot.Artist, slot.Title, slot.Url, slot.ImageUrl));
         }
 
         void UpdateNotification()
@@ -271,110 +236,6 @@ namespace wzxv
                 }
             });
         }
-
-        private int? _previousAudioVolume = null;
-        void AudioManager.IOnAudioFocusChangeListener.OnAudioFocusChange(AudioFocus focusChange)
-        {
-            var maxVolume = _audioManager.GetStreamMaxVolume(Stream.Music);
-
-            switch (focusChange)
-            {
-                case AudioFocus.Gain:
-                    Play();
-
-                    if (_previousAudioVolume != null)
-                    {
-                        _audioManager.SetStreamVolume(Stream.Music, _previousAudioVolume.Value, VolumeNotificationFlags.RemoveSoundAndVibrate);
-                        _previousAudioVolume = null;
-                    }
-                    break;
-
-                case AudioFocus.Loss:
-                case AudioFocus.LossTransient:
-                    Stop();
-                    break;
-
-                case AudioFocus.LossTransientCanDuck:
-                    _previousAudioVolume = _audioManager.GetStreamVolume(Stream.Music);
-                    _audioManager.SetStreamVolume(Stream.Music, (int)Math.Round(maxVolume * 0.1), VolumeNotificationFlags.RemoveSoundAndVibrate);
-                    break;
-            }
-        }
-
-        void IPlayerEventListener.OnPlayerError(ExoPlaybackException e)
-        {
-            Log.Error(TAG, $"Player error occurred, see debug log for full details");
-            Log.Debug(TAG, e.ToString());
-
-            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);
-
-            _notificationManager.Stop();
-
-            if (_lock != null)
-            {
-                _lock.Dispose();
-                _lock = null;
-            }
-
-            if (_mediaSession != null)
-            {
-                _mediaSession.Dispose();
-                _mediaSession = null;
-            }
-
-            StopForeground(true);
-
-            Error?.Invoke(this, new RadioStationServiceErrorEventArgs(e));
-        }
-
-        void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)
-        {
-            switch (playbackState)
-            {
-                case Player.StateReady:
-                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying);
-                    break;
-
-                case Player.StateBuffering:
-                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StateBuffering);
-                    break;
-            }
-
-            UpdateNotification();
-            StateChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        void IPlayerEventListener.OnLoadingChanged(bool isLoading)
-        {
-        }
-
-        void IPlayerEventListener.OnPlaybackParametersChanged(PlaybackParameters playbackParameters)
-        {
-        }
-
-        void IPlayerEventListener.OnPositionDiscontinuity(int reason)
-        {
-        }
-
-        void IPlayerEventListener.OnRepeatModeChanged(int reason)
-        {
-        }
-
-        void IPlayerEventListener.OnSeekProcessed()
-        {
-        }
-
-        void IPlayerEventListener.OnShuffleModeEnabledChanged(bool reason)
-        {
-        }
-
-        void IPlayerEventListener.OnTimelineChanged(Timeline timeline, Java.Lang.Object manifest, int reason)
-        {
-        }
-
-        void IPlayerEventListener.OnTracksChanged(TrackGroupArray ignored, TrackSelectionArray trackSelections)
-        {
-        }
     }
 
     public struct RadioStationServiceMetadataChangedEventArgs
@@ -390,16 +251,6 @@ namespace wzxv
             Title = title;
             Url = url;
             ImageUrl = imageUrl;
-        }
-    }
-
-    public struct RadioStationServiceErrorEventArgs
-    {
-        public Exception Exception { get; private set; }
-
-        public RadioStationServiceErrorEventArgs(Exception ex)
-        {
-            this.Exception = ex;
         }
     }
 

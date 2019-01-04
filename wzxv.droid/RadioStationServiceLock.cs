@@ -14,7 +14,7 @@ using Android.Widget;
 
 namespace wzxv
 {
-    class RadioStationServiceLock : IDisposable
+    class RadioStationServiceLock
     {
         private readonly WifiManager _wifiManager;
         private readonly PowerManager _powerManager;
@@ -34,7 +34,7 @@ namespace wzxv
             _powerWakeLock.Acquire();
         }
 
-        public void Dispose()
+        public void Release()
         {
             if (_wifiLock != null)
             {

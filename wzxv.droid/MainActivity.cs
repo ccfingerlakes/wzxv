@@ -16,7 +16,7 @@ using System.Collections.Generic;
 
 namespace wzxv
 {
-    [Activity(Name = ActivityName, Label = "@string/app_name", Theme = "@style/SplashScreen", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ScreenOrientation = ScreenOrientation.Portrait)]
+    [Activity(Name = ActivityName, Label = "@string/app_name", Theme = "@style/SplashScreen", MainLauncher = true, LaunchMode = LaunchMode.SingleTop, ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize, ScreenOrientation = ScreenOrientation.Portrait)]
     public class MainActivity : AppCompatActivity
     {
         public const string ActivityName = "wzxv.app.main";
@@ -79,17 +79,11 @@ namespace wzxv
                 _volumeRefresh.Start();
             }
 
-            Controls.TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
-            Controls.ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
-            Controls.CoverImage.Configure(coverImage =>
+            Controls.CoverImage.Click += (_, __) =>
             {
-                coverImage.Visibility = Android.Views.ViewStates.Invisible;
-                coverImage.Click += (_, __) =>
-                {
-                    if (_metadataUrl != null)
-                        LaunchBrowser(_metadataUrl);
-                };
-            });
+                if (_metadataUrl != null)
+                    LaunchBrowser(_metadataUrl);
+            };
 
             Controls.PlayButton.Click += OnPlayButtonClick;
 
@@ -110,13 +104,19 @@ namespace wzxv
             Controls.MailLink.Click += (_, __) => SendMail("manager@wzxv.org");
         }
 
+        protected override void OnDestroy()
+        {
+            base.OnDestroy();
+            _volumeRefresh.Dispose();
+        }
+
         void OnNetworkConnected()
         {
-            Controls.PlayButton.Configure(playButton =>
-            {
-                playButton.Alpha = 1.0f;
-                playButton.Clickable = true;
-            });
+            RunOnUiThread(() => Controls.PlayButton.Configure(playButton =>
+                {
+                    playButton.Alpha = 1.0f;
+                    playButton.Clickable = true;
+                }));
         }
 
         void OnNetworkDisconnected()
@@ -126,11 +126,11 @@ namespace wzxv
                 _service.Service.Stop();
             }
 
-            Controls.PlayButton.Configure(playButton =>
+            RunOnUiThread(() => Controls.PlayButton.Configure(playButton =>
             {
                 playButton.Alpha = 0.6f;
                 playButton.Clickable = false;
-            });
+            }));
         }
 
         void LaunchBrowser(string url)
@@ -174,52 +174,6 @@ namespace wzxv
             OnRefresh();
         }
 
-        protected override void OnDestroy()
-        {
-            base.OnDestroy();
-            _volumeRefresh.Stop();
-            _volumeRefresh.Dispose();
-        }
-
-        void OnRefresh()
-        {
-            if (Build.VERSION.SdkInt >= BuildVersionCodes.N)
-            {
-                RunOnUiThread(() =>
-                {
-                    Controls.VolumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
-                });
-            }
-        }
-
-        void OnRadioStationSchedule(object sender, RadioStationServiceMetadataChangedEventArgs e)
-        {
-            RunOnUiThread(() =>
-            {
-                Controls.ArtistLabel.Text = e.Artist;
-                Controls.TitleLabel.Text = e.Title;
-                _metadataUrl = e.Url;
-                Controls.CoverImage.SetImageResource(Resource.Drawable.logo);
-
-                if (e.ImageUrl != null)
-                {
-                    try
-                    {
-                        using (var response = _http.GetAsync(e.ImageUrl).Result)
-                        {
-                            if (response.IsSuccessStatusCode)
-                            {
-                                Controls.CoverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
-                            }
-                        }
-                    }
-                    catch
-                    {
-                    }
-                }
-            });
-        }
-
         void OnVolumeChanged(object sender, SeekBar.ProgressChangedEventArgs e)
         {
             _audioManager.SetStreamVolume(Stream.Music, e.Progress, VolumeNotificationFlags.RemoveSoundAndVibrate);
@@ -249,30 +203,66 @@ namespace wzxv
             }
         }
 
-        void OnRadioStationStateChanged(object sender, EventArgs e)
+        void OnRefresh()
         {
-            if (_service.Service.IsPlaying)
+            if (Build.VERSION.SdkInt >= BuildVersionCodes.N)
             {
-                Controls.PlayButton.SetImageResource(Resource.Drawable.pause);
-                Controls.TitleLabel.Visibility = Android.Views.ViewStates.Visible;
-                Controls.ArtistLabel.Visibility = Android.Views.ViewStates.Visible;
-                Controls.CoverImage.Visibility = Android.Views.ViewStates.Visible;
-                AppCenterEvents.Playing();
-            }
-            else
-            {
-                Controls.PlayButton.SetImageResource(Resource.Drawable.play);
-                Controls.TitleLabel.Visibility = Android.Views.ViewStates.Invisible;
-                Controls.ArtistLabel.Visibility = Android.Views.ViewStates.Invisible;
-                Controls.CoverImage.Visibility = Android.Views.ViewStates.Invisible;
-                AppCenterEvents.Stopped();
+                RunOnUiThread(() =>
+                {
+                    Controls.VolumeBar.SetProgress(_audioManager.GetStreamVolume(Stream.Music), false);
+                });
             }
         }
 
-        void OnRadioStationError(object sender, RadioStationServiceErrorEventArgs e)
+        void OnRadioStationMetadataChanged(object sender, RadioStationServiceMetadataChangedEventArgs e)
+        {
+            RunOnUiThread(() =>
+            {
+                Controls.ArtistLabel.Text = e.Artist;
+                Controls.TitleLabel.Text = e.Title;
+                _metadataUrl = e.Url;
+                Controls.CoverImage.SetImageResource(Resource.Drawable.logo);
+
+                if (e.ImageUrl != null)
+                {
+                    try
+                    {
+                        using (var response = _http.GetAsync(e.ImageUrl).Result)
+                        {
+                            if (response.IsSuccessStatusCode)
+                            {
+                                Controls.CoverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            });
+        }
+
+        void OnRadioStationStateChanged(object sender, EventArgs e)
+        {
+            RunOnUiThread(() =>
+            {
+                if (_service.Service.IsPlaying)
+                {
+                    Controls.PlayButton.SetImageResource(Resource.Drawable.pause);
+                    AppCenterEvents.Playing();
+                }
+                else
+                {
+                    Controls.PlayButton.SetImageResource(Resource.Drawable.play);
+                    AppCenterEvents.Stopped();
+                }
+            });
+        }
+
+        void OnRadioStationError(object sender, RadioStationErrorEventArgs e)
         {
             AppCenterEvents.Error(e.Exception);
-            Toast.MakeText(ApplicationContext, "The stream for WZXV - The Word was interrupted", ToastLength.Long).Show();
+            RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word was interrupted", ToastLength.Long).Show());
         }
 
         class AudioPlayerServiceConnection : Java.Lang.Object, IServiceConnection
@@ -291,7 +281,7 @@ namespace wzxv
                     _instance._service = binder;
                     binder.Service.StateChanged += _instance.OnRadioStationStateChanged;
                     binder.Service.Error += _instance.OnRadioStationError;
-                    binder.Service.Metadata += _instance.OnRadioStationSchedule;
+                    binder.Service.MetadataChanged += _instance.OnRadioStationMetadataChanged;
                 }
             }
 

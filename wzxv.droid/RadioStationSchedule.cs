@@ -25,15 +25,13 @@ namespace wzxv
         private readonly object _syncRoot = new object();
         private readonly TimeZoneInfo _est = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
         private readonly Timer _timer;
-        private readonly IEnumerable<Slot> _slots;
+        private IEnumerable<Slot> _slots;
         private Slot _previous;
 
         public event EventHandler<RadioStationScheduleChangedEventArgs> Changed;
 
         public RadioStationSchedule(Action<Slot> onChanged = null)
         {
-            _slots = ReadSlots();
-
             if (onChanged != null)
             {
                 Changed += (_, e) => onChanged(e.Current);
@@ -45,7 +43,12 @@ namespace wzxv
                 AutoReset = false
             };
             _timer.Elapsed += OnRefresh;
-            _timer.Start();
+
+            Task.Run(() =>
+            {
+                _slots = ReadSlots();
+                _timer.Start();
+            });
         }
 
         public void Refresh(bool force = false)

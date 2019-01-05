@@ -24,7 +24,7 @@ namespace wzxv
         private const string TAG = "wzxv.app.radio.player";
         private const string StreamUrl = "http://ic2.christiannetcast.com/wzxv-fm";
 
-        private readonly object _syncRoot = new object();
+        private readonly Handler _handler;
         private readonly Context _context;
         private readonly AudioManager _audioManager;
         private SimpleExoPlayer _player;
@@ -33,29 +33,30 @@ namespace wzxv
         {
             _context = context;
             _audioManager = (AudioManager)context.GetSystemService(Context.AudioService);
+            _handler = new Handler();
         }
 
         public event EventHandler StateChanged;
         public event EventHandler<RadioStationErrorEventArgs> Error;
 
-        public bool IsPlaying => _player != null && _player.PlayWhenReady == true && _player.PlaybackState == Player.StateReady;
+        public bool IsPlaying { get;  private set; }
 
         protected override void Dispose(bool disposing)
         {
-            Stop().Wait();
+            Stop();
             base.Dispose(disposing);
         }
 
-        public async Task Start()
+        public void Start()
         {
             if (_player != null)
             {
-                await Stop().ConfigureAwait(false);
+                Stop();
             }
 
-            await Task.Run(() =>
+            _handler.Post(() =>
             {
-                lock (_syncRoot)
+                try
                 {
                     var defaultBandwidthMeter = new DefaultBandwidthMeter();
                     var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory(defaultBandwidthMeter);
@@ -90,7 +91,14 @@ namespace wzxv
                         #pragma warning restore CS0618 // Type or member is obsolete
                     }
                 }
-            }).ConfigureAwait(false);
+                catch (Exception ex)
+                {
+                    Log.Error(TAG, $"Could not start player: {ex.Message}");
+                    Log.Debug(TAG, ex.ToString());
+                    Error?.Invoke(this, new RadioStationErrorEventArgs(ex));
+                    IsPlaying = false;
+                }
+            });
 
             void play()
             {
@@ -102,25 +110,34 @@ namespace wzxv
                 var mediaSource = mediaSourceFactory.CreateMediaSource(mediaUri);
 
                 _player.Prepare(mediaSource);
+                IsPlaying = true;
             }
         }
 
-        public async Task Stop()
+        public void Stop()
         {
-            await Task.Run(() =>
+            _handler.Post(() =>
             {
-                lock (_syncRoot)
+                try
                 {
                     if (_player != null)
                     {
+                        IsPlaying = false;
                         _player.RemoveListener(this);
                         _player.Release();
-                        _player = null;
-
                         StateChanged?.Invoke(this, EventArgs.Empty);
                     }
                 }
-            }).ConfigureAwait(false);
+                catch (Exception ex)
+                {
+                    Log.Warn(TAG, $"Error during stop of player: {ex.Message}");
+                    Log.Debug(TAG, ex.ToString());
+                }
+                finally
+                {
+                    _player = null;
+                }
+            });
         }
 
         private int? _previousAudioVolume = null;
@@ -156,11 +173,24 @@ namespace wzxv
         {
             Log.Error(TAG, $"Player error occurred, see debug log for full details");
             Log.Debug(TAG, e.ToString());
-            Task.Run(() => Error?.Invoke(this, new RadioStationErrorEventArgs(e))).ConfigureAwait(false);
+            Error?.Invoke(this, new RadioStationErrorEventArgs(e));
         }
 
         void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)
         {
+            switch (playbackState)
+            {
+                case Player.StateBuffering:
+                case Player.StateReady:
+                    IsPlaying = _player.PlayWhenReady;
+                    break;
+
+                case Player.StateIdle:
+                case Player.StateEnded:
+                    IsPlaying = false;
+                    break;
+            }
+
             StateChanged?.Invoke(this, EventArgs.Empty);
         }
 

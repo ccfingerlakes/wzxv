@@ -33,6 +33,7 @@ namespace wzxv
         private const string TAG = "wzxv.app.radio";
         private const int NotificationId = 1;
 
+        private int _startId;
         private RadioStationPlayer _player;
         private RadioStationNotificationManager _notificationManager;
         private RadioStationMediaSession _mediaSession;
@@ -44,7 +45,7 @@ namespace wzxv
         public event EventHandler StateChanged;
         public event EventHandler<RadioStationErrorEventArgs> Error;
 
-        public bool IsStarted { get; private set; } = false;
+        
         public bool IsPlaying => _player != null && _player.IsPlaying;
 
         public override void OnCreate()
@@ -97,11 +98,15 @@ namespace wzxv
         {
             if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
             {
-                if (!IsStarted)
+                if (_startId == 0)
                 {
                     StartForeground(NotificationId, _notificationManager.CreateNotificationBuilder().Build());
-                    IsStarted = true;
                 }
+            }
+
+            if (_startId == 0)
+            {
+                _startId = startId;
             }
 
             switch (intent.Action)
@@ -162,8 +167,6 @@ namespace wzxv
             }
             finally
             {
-                IsStarted = false;
-
                 if (_lock != null)
                 {
                     _lock.Release();
@@ -171,6 +174,9 @@ namespace wzxv
                 }
 
                 StopForeground(false);
+                StopSelf(_startId);
+
+                _startId = 0;
             }
         }
 

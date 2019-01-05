@@ -146,7 +146,7 @@ namespace wzxv
             }
         }
 
-        public void Stop(bool force = false)
+        public void Stop()
         {
             try
             {
@@ -159,7 +159,6 @@ namespace wzxv
             {
                 Log.Error(TAG, $"Error during stop: {ex.Message}");
                 Log.Debug(TAG, ex.ToString());
-                force = true;
             }
             finally
             {
@@ -171,7 +170,7 @@ namespace wzxv
                     _lock = null;
                 }
 
-                StopForeground(force);
+                StopForeground(false);
             }
         }
 

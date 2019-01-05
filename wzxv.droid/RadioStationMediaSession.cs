@@ -17,14 +17,11 @@ namespace wzxv
 {
     class RadioStationMediaSession : IDisposable
     {
-        private readonly AudioManager _audioManager;
         private readonly MediaSessionCompat _session;
         private readonly MediaControllerCompat _controller;
 
         public RadioStationMediaSession(Context context)
         {
-            _audioManager = (AudioManager)context.GetSystemService(Context.AudioService);
-
             var intent = new Intent(context, typeof(MainActivity));
             var pendingIntent = PendingIntent.GetActivity(context, 0, intent, 0);
             var componentName = new ComponentName(context.PackageName, new RadioStationBroadcastReceiver().ComponentName);
@@ -32,9 +29,9 @@ namespace wzxv
             _session = new MediaSessionCompat(context, "wzxv.app", componentName, pendingIntent);
             _controller = new MediaControllerCompat(context, _session.SessionToken);
             
-            _session.Active = true;
             _session.SetCallback(new MediaSessionCallback(context));
             _session.SetFlags(MediaSessionCompat.FlagHandlesMediaButtons | MediaSessionCompat.FlagHandlesTransportControls);
+            _session.Active = true;
         }
 
         public void Dispose()

@@ -90,8 +90,8 @@ namespace wzxv
 
             if (PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
             {
-                Controls.PhoneButton.Click += (_, __) => ContactConnector.OpenDialer(this, "5853983569");
-                Controls.PhoneLink.Click += (_, __) => ContactConnector.OpenDialer(this, "5853983569");
+                Controls.PhoneButton.Click += (_, __) => ContactConnector.OpenDialer(this, "15853983569");
+                Controls.PhoneLink.Click += (_, __) => ContactConnector.OpenDialer(this, "15853983569");
             }
 
             Controls.MapButton.Click += (_, __) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);

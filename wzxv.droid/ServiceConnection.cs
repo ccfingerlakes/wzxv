@@ -30,7 +30,7 @@ namespace wzxv
 
         public void OnServiceDisconnected(ComponentName name)
         {
-            _callback(default);
+            _callback(default(T));
         }
     }
 }

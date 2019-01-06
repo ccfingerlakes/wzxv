@@ -59,7 +59,7 @@ namespace wzxv
                 var intent = new Intent(ApplicationContext, typeof(RadioStationScheduleService));
                 var connection = new ServiceConnection<RadioStationScheduleServiceBinder>(binder =>
                 {
-                    if (binder == default)
+                    if (binder == null)
                     {
                         if (_schedule != null)
                         {
@@ -223,7 +223,7 @@ namespace wzxv
         {
             if (_player.IsPlaying)
             {
-                _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying, (_schedule?.NowPlaying?.Position ?? default));
+                _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying, (_schedule?.NowPlaying?.Position ?? default(TimeSpan)));
             }
             else
             {

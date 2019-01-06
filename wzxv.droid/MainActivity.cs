@@ -109,12 +109,10 @@ namespace wzxv
             // Contact
             if (PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
             {
-                Controls.PhoneButton.Click += (_, __) => ContactConnector.OpenDialer(this, "15853983569");
                 Controls.PhoneLink.Click += (_, __) => ContactConnector.OpenDialer(this, "15853983569");
             }
 
             Controls.MapButton.Click += (_, __) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);
-            Controls.MailButton.Click += (_, __) => ContactConnector.OpenMail(this, "manager@wzxv.org");
             Controls.MailLink.Click += (_, __) => ContactConnector.OpenMail(this, "manager@wzxv.org");
         }
 
@@ -299,10 +297,8 @@ namespace wzxv
             public static ImageView MediaButton => __activity?.FindViewById<ImageView>(Resource.Id.mediaButton);
 
             // Contact Controls
-            public static ImageView PhoneButton => __activity?.FindViewById<ImageView>(Resource.Id.phoneButton);
             public static TextView PhoneLink => __activity?.FindViewById<TextView>(Resource.Id.phoneLink);
             public static ImageView MapButton => __activity?.FindViewById<ImageView>(Resource.Id.mapButton);
-            public static ImageView MailButton => __activity?.FindViewById<ImageView>(Resource.Id.mailButton);
             public static TextView MailLink => __activity?.FindViewById<TextView>(Resource.Id.mailLink);
 
             // Social Buttons

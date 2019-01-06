@@ -169,24 +169,24 @@
 			android:paddingRight="4dp"
 			android:background="@color/tooltip_background_dark"
 			android:layout_alignParentBottom="true">
-			<ImageView
-				android:contentDescription="Call WZXV"
-				android:src="@drawable/phone"
-				android:layout_width="24dp"
-				android:layout_height="24dp"
-				android:layout_weight="0"
-				android:visibility="gone"
-				android:id="@+id/phoneButton" />
 			<TextView
 				android:text="+1 (585) 398-3569"
 				android:textAppearance="?android:attr/textAppearanceSmall"
+				android:gravity="left|center"
 				android:layout_width="120dp"
 				android:layout_height="fill_parent"
-				android:textColor="@color/tooltip_background_light"
-				android:gravity="left|center"
-				android:textStyle="bold"
 				android:layout_weight="0"
-				android:textSize="12dp"
+				android:paddingLeft="8dp"
+				android:textColor="@color/tooltip_background_light"
+				android:autoSizeTextType="uniform"
+				android:autoSizeMinTextSize="6dp"
+				android:autoSizeMaxTextSize="12dp"
+				android:autoSizeStepGranularity="1dp"
+				android:textStyle="bold"
+				android:shadowColor="@android:color/black"
+				android:shadowRadius="1"
+				android:shadowDx="1"
+				android:shadowDy="1"
 				android:id="@+id/phoneLink" />
 			<ImageView
 				android:contentDescription="Visit WZXV"
@@ -199,23 +199,22 @@
 			<TextView
 				android:text="manager@wzxv.org"
 				android:textAppearance="?android:attr/textAppearanceSmall"
+				android:gravity="right|center"
 				android:layout_width="120dp"
 				android:layout_height="fill_parent"
+				android:layout_weight="0"
+				android:paddingRight="8dp"
 				android:textColor="@color/tooltip_background_light"
-				android:gravity="center"
+				android:autoSizeTextType="uniform"
+				android:autoSizeMinTextSize="6dp"
+				android:autoSizeMaxTextSize="12dp"
+				android:autoSizeStepGranularity="1dp"
 				android:textStyle="bold"
-				android:layout_weight="0"
-				android:textSize="12dp"
+				android:shadowColor="@android:color/black"
+				android:shadowRadius="1"
+				android:shadowDx="1"
+				android:shadowDy="1"
 				android:id="@+id/mailLink" />
-			<ImageView
-				android:contentDescription="Email WZXV"
-				android:src="@drawable/mail"
-				android:layout_width="24dp"
-				android:layout_height="24dp"
-				android:layout_gravity="right|center"
-				android:layout_weight="0"
-				android:visibility="gone"
-				android:id="@+id/mailButton" />
 		</LinearLayout>
 	</LinearLayout>
 </LinearLayout>

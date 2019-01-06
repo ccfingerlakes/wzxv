@@ -53,9 +53,9 @@ namespace wzxv
             return this;
         }
 
-        public RadioStationMediaSession SetPlaybackState(int state, TimeSpan position = default, Action<PlaybackStateCompat.Builder> configure = null)
+        public RadioStationMediaSession SetPlaybackState(int state, TimeSpan position = default(TimeSpan), Action<PlaybackStateCompat.Builder> configure = null)
         {
-            var positionMS = position == default ? -1 : (long)Math.Ceiling(position.TotalMilliseconds);
+            var positionMS = position == default(TimeSpan) ? -1 : (long)Math.Ceiling(position.TotalMilliseconds);
             var builder = new PlaybackStateCompat.Builder()
                             .SetActions(PlaybackStateCompat.ActionPlay | PlaybackStateCompat.ActionPause)
                             .SetState(state, positionMS, 1.0f, SystemClock.ElapsedRealtime());

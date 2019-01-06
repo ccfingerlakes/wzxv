@@ -1,130 +1,58 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
-using System.Timers;
+
 using Android.App;
 using Android.Content;
 using Android.OS;
 using Android.Runtime;
-using Android.Util;
 using Android.Views;
 using Android.Widget;
 
 namespace wzxv
 {
-    public class RadioStationSchedule : IDisposable
+    public class RadioStationSchedule
     {
-        private const string TAG = "wzxv.app.radio.schedule";
-        private const string Url = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/master/schedule.csv";
+        private readonly Slot[] _schedule;
 
-        private readonly object _syncRoot = new object();
-        private readonly TimeZoneInfo _est = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
-        private readonly Timer _timer;
-        private IEnumerable<Slot> _slots;
-        private Slot _previous;
-
-        public event EventHandler<RadioStationScheduleChangedEventArgs> Changed;
-
-        public RadioStationSchedule(Action<Slot, DateTimeOffset, TimeSpan> onChanged = null)
+        public RadioStationSchedule(IEnumerable<Slot> slots = null)
         {
-            if (onChanged != null)
-            {
-                Changed += (_, e) => onChanged(e.Current, e.Started, e.Duration);
-            }
+            _schedule = slots?.ToArray() ?? Array.Empty<Slot>();
+        }
 
-            _timer = new Timer()
-            {
-                Interval = 250,
-                AutoReset = false
-            };
-            _timer.Elapsed += OnRefresh;
+        public bool TryGetCurrent(out Slot current, out DateTimeOffset start, out TimeSpan duration, out TimeSpan interval)
+        {
+            var now = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, Globalization.EasternStandardTime);
 
-            Task.Run(async () =>
+            var schedule = _schedule.Select(s =>
             {
-                _slots = await Read();
-                _timer.Start();
+                var n = Next(now, s.DayOfWeek, s.TimeOfDay);
+                return (Slot: s, LastPlayed: n.AddDays(-7), NextPlay: n);
             });
-        }
-
-        public void Refresh(bool force = false)
-        {
-            lock (_syncRoot)
-            {
-                if (force)
-                {
-                    _previous = null;
-                }
-
-                _timer.Stop();
-                _timer.Interval = 250;
-                _timer.Start();
-            }
-        }
-
-        void OnRefresh(object sender, ElapsedEventArgs e)
-        {
-            lock (_syncRoot)
-            {
-                var interval = TimeSpan.FromMinutes(1);
-
-                if (TryGet(out var current, out var started, out var duration, out var next))
-                {
-                    if (_previous != current)
-                    {
-                        _previous = current;
-                        Changed?.Invoke(this, new RadioStationScheduleChangedEventArgs(current, started, duration));
-                    }
-
-                    interval = next;
-                }
-
-                _timer.Interval = interval.TotalMilliseconds;
-                _timer.Start();
-            }
-        }
-
-        public void Dispose()
-        {
-            _timer.Dispose();
-        }
-
-        bool TryGet(out Slot slot, out DateTimeOffset started, out TimeSpan duration, out TimeSpan next)
-        {
-            var now = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, _est);
-            var schedule = _slots
-                            .Select(s =>
-                            {
-                                var n = Next(now, s.DayOfWeek, s.TimeOfDay);
-                                return new { Slot = s, Current = n.AddDays(-7), Next = n };
-                            })
-                            .ToArray();
 
             var currentSlot = schedule
-                    .Where(i => i.Current <= now)
-                    .OrderByDescending(i => i.Current)
+                    .Where(i => i.LastPlayed <= now)
+                    .OrderByDescending(i => i.LastPlayed)
                     .Take(1)
                     .FirstOrDefault();
 
-            slot = currentSlot.Slot;
-            started = currentSlot.Current.ToLocalTime();
+            current = currentSlot.Slot;
+            start = currentSlot.LastPlayed.ToLocalTime();
 
             var nextSlot = schedule
-                    .Where(i => i.Next > now)
-                    .OrderBy(i => i.Next)
+                    .Where(i => i.NextPlay > now)
+                    .OrderBy(i => i.NextPlay)
                     .Take(1)
-                    .Select(i => i.Next)
+                    .Select(i => i.NextPlay)
                     .FirstOrDefault();
 
-            duration = nextSlot.Subtract(started);
-            next = nextSlot
+            duration = nextSlot.Subtract(start).Add(TimeSpan.FromSeconds(1));
+            interval = nextSlot
                     .Subtract(now)
-                    .Add(TimeSpan.FromSeconds(1));
+                    .Subtract(TimeSpan.FromSeconds(1));
 
-            return (slot != null);
+            return (current != null);
         }
 
         static DateTimeOffset Next(DateTimeOffset date, DayOfWeek dow, TimeSpan tod)
@@ -139,108 +67,6 @@ namespace wzxv
             }
 
             return new DateTimeOffset(date.Year, date.Month, date.Day, tod.Hours, tod.Minutes, tod.Seconds, tod.Minutes, date.Offset);
-        }
-
-        static async Task<IEnumerable<Slot>> Read()
-        {
-            using (var client = new HttpClient())
-            {
-                try
-                {
-                    using (var response = await client.GetAsync(Url))
-                    {
-                        if (response.IsSuccessStatusCode)
-                        {
-                            var content = await response.Content.ReadAsStringAsync();
-
-                            if (content != null)
-                                return Parse(content);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(TAG, $"Failed to retrieve schedule metadata: {ex.Message}");
-                    Log.Debug(TAG, ex.ToString());
-                }
-            }
-
-            return Array.Empty<Slot>();
-        }
-
-        static IEnumerable<Slot> Parse(string content)
-        {
-            var slots = new List<Slot>();
-
-            if (!string.IsNullOrEmpty(content))
-            {
-                var culture = CultureInfo.GetCultureInfo("en-US");
-
-                foreach (var row in CsvReader.Parse(content))
-                {
-                    if (row.Length < 4)
-                    {
-                        Log.Warn(TAG, $"Invalid row length ({row.Length}) detected; the row will be skipped");
-                    }
-                    else if (row[0].Equals("Weekday", StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        row[0] = DayOfWeek.Monday.ToString();
-                        if (TryParse(row, culture, out var monday))
-                            slots.Add(monday);
-
-                        row[0] = DayOfWeek.Tuesday.ToString();
-                        if (TryParse(row, culture, out var tuesday))
-                            slots.Add(tuesday);
-
-                        row[0] = DayOfWeek.Wednesday.ToString();
-                        if (TryParse(row, culture, out var wednesday))
-                            slots.Add(wednesday);
-
-                        row[0] = DayOfWeek.Thursday.ToString();
-                        if (TryParse(row, culture, out var thursday))
-                            slots.Add(thursday);
-
-                        row[0] = DayOfWeek.Friday.ToString();
-                        if (TryParse(row, culture, out var friday))
-                            slots.Add(friday);
-                    }
-                    else
-                    {
-                        if (TryParse(row, culture, out var slot))
-                            slots.Add(slot);
-                    }
-                }
-            }
-
-            return slots;
-        }
-
-        static bool TryParse(string[] values, CultureInfo culture, out Slot slot)
-        {
-            slot = null;
-
-            if (Enum.TryParse<DayOfWeek>(values[0], out var dow))
-            {
-                if (TimeSpan.TryParseExact(values[1], "h\\:mm", culture, out var tod))
-                {
-                    var url = values.Length >= 5 ? values[4] : null;
-                    var imageUrl = values.Length >= 6 ? values[5] : null;
-
-                    slot = new Slot(dow, tod, values[3], values[2], url, imageUrl);
-
-                    return true;
-                }
-                else
-                {
-                    Log.Warn(TAG, $"Invalid TimeOfDay '{values[1]}'; the row will be skipped");
-                }
-            }
-            else
-            {
-                Log.Warn(TAG, $"Invalid DayOfWeek '{values[0]}'; the row will be skipped");
-            }
-
-            return false;
         }
 
         public class Slot
@@ -261,20 +87,6 @@ namespace wzxv
                 Url = url;
                 ImageUrl = imageUrl;
             }
-        }
-    }
-
-    public class RadioStationScheduleChangedEventArgs : EventArgs
-    {
-        public RadioStationSchedule.Slot Current { get; private set; }
-        public DateTimeOffset Started { get; private set; }
-        public TimeSpan Duration { get; private set; }
-
-        public RadioStationScheduleChangedEventArgs(RadioStationSchedule.Slot current, DateTimeOffset started, TimeSpan duration)
-        {
-            Current = current;
-            Started = started;
-            Duration = duration;
         }
     }
 }

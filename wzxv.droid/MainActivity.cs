@@ -25,9 +25,8 @@ namespace wzxv
         public const string ActivityName = "wzxv.app.main";
 
         private NetworkStatus _networkStatus;
-        private RadioStationServiceBinder _service;
-        private string _metadataUrl;
-        private readonly HttpClient _http = new HttpClient();
+        private RadioStationService _service;
+        private RadioStationScheduleService _schedule;
         
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -48,7 +47,44 @@ namespace wzxv
             if (_service == null)
             {
                 var intent = new Intent(ApplicationContext, typeof(RadioStationService));
-                var connection = new AudioPlayerServiceConnection(this);
+                var connection = new ServiceConnection<RadioStationServiceBinder>(binder =>
+                {
+                    if (binder != null)
+                    {
+                        _service = binder.Service;
+                        _service.Playing += OnRadioStationPlaying;
+                        _service.StateChanged += OnRadioStationStateChanged;
+                        _service.Error += OnRadioStationError;
+                    }
+                    else
+                    {
+                        _service.Playing -= OnRadioStationPlaying;
+                        _service.StateChanged -= OnRadioStationStateChanged;
+                        _service.Error -= OnRadioStationError;
+                        _service = null;
+                    }
+                });
+
+                BindService(intent, connection, Bind.AutoCreate);
+            }
+
+            if (_schedule == null)
+            {
+                var intent = new Intent(ApplicationContext, typeof(RadioStationScheduleService));
+                var connection = new ServiceConnection<RadioStationScheduleServiceBinder>(binder =>
+                {
+                    if (binder != null)
+                    {
+                        _schedule = binder.Service;
+                        _schedule.Changed += OnRadioStationScheduleChanged;
+                    }
+                    else
+                    {
+                        _schedule.Changed -= OnRadioStationScheduleChanged;
+                        _schedule = null;
+                    }
+                });
+
                 BindService(intent, connection, Bind.AutoCreate);
             }
 
@@ -59,13 +95,9 @@ namespace wzxv
         void InitializeControls()
         {
             // Now Playing
-            Controls.NowPlayingProgress.Configure(c =>
-            {
-                c.Enabled = false;
-                c.Max = 100;
-                c.Progress = 0;
-            });
+            Controls.PlayingProgress.Progress = 0;
             Controls.CoverImage.Click += OnCoverImageClick;
+            Controls.ScheduleTimeRange.Text = "";
             Controls.MediaButton.Click += OnPlayButtonClick;
 
             // Social
@@ -101,12 +133,12 @@ namespace wzxv
 
         void OnPlayButtonClick(object sender, EventArgs e)
         {
-            Events.Click("Media Button", new { _service.Service.IsPlaying });
+            Events.Click("Media Button", new { _service.IsPlaying });
             Controls.MediaButton.Enabled = false;
 
-            if (_service.Service.IsPlaying)
+            if (_service.IsPlaying)
             {
-                _service.Service.Stop();
+                _service.Stop();
             }
             else
             {
@@ -125,12 +157,14 @@ namespace wzxv
 
         void OnCoverImageClick(object sender, EventArgs e)
         {
-            if (_metadataUrl != null)
+            var url = _schedule?.NowPlaying?.Slot?.Url;
+
+            if (url != null)
             {
-                var uri = Android.Net.Uri.Parse(_metadataUrl);
+                var uri = Android.Net.Uri.Parse(url);
                 var intent = new Intent(Intent.ActionView, uri);
                 StartActivity(intent);
-                Events.Click("Cover", new { Url = _metadataUrl });
+                Events.Click("Cover", new { Url = url });
             }
         }
 
@@ -145,9 +179,9 @@ namespace wzxv
 
         void OnNetworkDisconnected()
         {
-            if (_service != null && _service.Service.IsPlaying)
+            if (_service != null && _service.IsPlaying)
             {
-                _service.Service.Stop();
+                _service.Stop();
             }
 
             RunOnUiThread(() => Controls.MediaButton.Configure(playButton =>
@@ -165,35 +199,34 @@ namespace wzxv
             Events.ExternalLink("Browser", url);
         }
 
-        void OnDuration(object sender, RadioStationDurationEventArgs e)
+        void OnRadioStationPlaying(object sender, EventArgs e)
         {
             RunOnUiThread(() =>
             {
-                Controls.NowPlayingLength.Text = FormatPlayingTime(e.Position);
-                Controls.NowPlayingRemaining.Text = $"-{FormatPlayingTime(e.Remaining)}";
-                Controls.NowPlayingProgress.Configure(c =>
+                var playing = _schedule.NowPlaying;
+
+                Controls.PlayingProgress.Configure(c =>
                 {
                     c.Progress = 0;
-                    c.Max = (int)Math.Ceiling(e.Duration.TotalSeconds);
-                    c.Progress = (int)Math.Floor(e.Position.TotalSeconds);
+                    c.Max = (int)Math.Ceiling(playing.Duration.TotalSeconds);
+                    c.Progress = (int)Math.Floor(playing.Position.TotalSeconds);
                 });
             });
-
-            string FormatPlayingTime(TimeSpan time)
-                => $"{Math.Floor(time.TotalMinutes).ToString("#0")}:{time.Seconds.ToString("00")}";
         }
 
-        void OnRadioStationMetadataChanged(object sender, RadioStationServiceMetadataChangedEventArgs e)
+        void OnRadioStationScheduleChanged(object sender, EventArgs e)
         {
-            RunOnUiThread(() =>
+            RunOnUiThread(async () =>
             {
-                _metadataUrl = e.Url;
+                var playing = _schedule.NowPlaying;
+                var slot = playing.Slot;
 
-                Controls.ArtistLabel.Text = e.Artist;
-                Controls.TitleLabel.Text = e.Title;
+                Controls.ArtistLabel.Text = slot.Artist;
+                Controls.TitleLabel.Text = slot.Title;
+                Controls.ScheduleTimeRange.Text = $"{Globalization.Today.Add(playing.Slot.TimeOfDay).ToString("h:mm tt")} - {Globalization.Today.Add(playing.Slot.TimeOfDay).Add(playing.Duration).ToString("h:mm tt")}";
                 Controls.CoverImage.SetImageResource(Resource.Drawable.logo);
 
-                if (e.ImageUrl == null)
+                if (slot.ImageUrl == null)
                 {
                     Controls.CoverImage.Configure(coverImage =>
                     {
@@ -203,23 +236,17 @@ namespace wzxv
                 }
                 else
                 {
-                    Controls.CoverImage.Configure(coverImage =>
+                    await Controls.CoverImage.ConfigureAsync(async coverImage =>
                     {
-                        coverImage.ContentDescription = $"Visit {e.Artist} on the Web";
+                        coverImage.ContentDescription = $"Visit {slot.Artist} on the Web";
 
                         try
                         {
-                            using (var response = _http.GetAsync(e.ImageUrl).Result)
-                            {
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    coverImage.SetImageBitmap(BitmapFactory.DecodeStream(response.Content.ReadAsStreamAsync().Result));
-                                }
-                            }
+                            await coverImage.SetBitmapFromUrl(slot.ImageUrl);
                         }
                         catch (Exception ex)
                         {
-                            Log.Warn(TAG, $"Failed to retrieve metadata image url '{e.ImageUrl}': {ex.Message}");
+                            Log.Warn(TAG, $"Failed to retrieve metadata image url '{slot.ImageUrl}': {ex.Message}");
                             Log.Debug(TAG, ex.ToString());
                             coverImage.SetImageResource(Resource.Drawable.logo);
                         }
@@ -232,7 +259,7 @@ namespace wzxv
         {
             RunOnUiThread(() =>
             {
-                if (_service.Service.IsPlaying)
+                if (_service.IsPlaying)
                 {
                     Controls.MediaButton.Configure(mediaButton =>
                     {
@@ -262,37 +289,6 @@ namespace wzxv
             RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word is having \"issues\"... :(", ToastLength.Long).Show());
         }
 
-        class AudioPlayerServiceConnection : Java.Lang.Object, IServiceConnection
-        {
-            MainActivity _instance;
-
-            public AudioPlayerServiceConnection(MainActivity instance)
-            {
-                _instance = instance;
-            }
-
-            public void OnServiceConnected(ComponentName name, IBinder service)
-            {
-                if (service is RadioStationServiceBinder binder)
-                {
-                    _instance._service = binder;
-                    binder.Service.Duration += _instance.OnDuration;
-                    binder.Service.StateChanged += _instance.OnRadioStationStateChanged;
-                    binder.Service.Error += _instance.OnRadioStationError;
-                    binder.Service.MetadataChanged += _instance.OnRadioStationMetadataChanged;
-                }
-            }
-
-            public void OnServiceDisconnected(ComponentName name)
-            {
-                _instance._service.Service.Duration -= _instance.OnDuration;
-                _instance._service.Service.StateChanged -= _instance.OnRadioStationStateChanged;
-                _instance._service.Service.Error -= _instance.OnRadioStationError;
-                _instance._service.Service.MetadataChanged -= _instance.OnRadioStationMetadataChanged;
-                _instance._service = null;
-            }
-        }
-
         static class Controls
         {
             private static MainActivity __activity;
@@ -316,12 +312,11 @@ namespace wzxv
             public static ImageView InstagramButton => __activity?.FindViewById<ImageView>(Resource.Id.instagramButton);
 
             // Now Playing
-            public static TextView NowPlayingLength => __activity?.FindViewById<TextView>(Resource.Id.nowPlayingLength);
-            public static SeekBar NowPlayingProgress => __activity?.FindViewById<SeekBar>(Resource.Id.nowPlayingProgress);
-            public static TextView NowPlayingRemaining => __activity?.FindViewById<TextView>(Resource.Id.nowPlayingRemaining);
+            public static ImageView CoverImage => __activity?.FindViewById<ImageView>(Resource.Id.coverImage);
             public static TextView ArtistLabel => __activity?.FindViewById<TextView>(Resource.Id.artistLabel);
             public static TextView TitleLabel => __activity?.FindViewById<TextView>(Resource.Id.titleLabel);
-            public static ImageView CoverImage => __activity?.FindViewById<ImageView>(Resource.Id.coverImage);
+            public static TextView ScheduleTimeRange => __activity?.FindViewById<TextView>(Resource.Id.scheduleTimeRange);
+            public static ProgressBar PlayingProgress => __activity?.FindViewById<ProgressBar>(Resource.Id.playingProgress);
         }
     }
 }

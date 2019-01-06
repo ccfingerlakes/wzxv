@@ -39,26 +39,32 @@ namespace wzxv
             _session.Release();
         }
 
-        public void SetMetadata(string artist, string title, Action<MediaMetadataCompat.Builder> build = null)
+        public RadioStationMediaSession SetMetadata(string artist, string title, TimeSpan duration, Action<MediaMetadataCompat.Builder> build = null)
         {
             var builder = new MediaMetadataCompat.Builder()
                                 .PutString(MediaMetadata.MetadataKeyArtist, artist)
-                                .PutString(MediaMetadata.MetadataKeyTitle, title);
+                                .PutString(MediaMetadata.MetadataKeyTitle, title)
+                                .PutLong(MediaMetadata.MetadataKeyDuration, (long)Math.Ceiling(duration.TotalMilliseconds));
 
             build?.Invoke(builder);
 
             _session.SetMetadata(builder.Build());
+
+            return this;
         }
 
-        public void SetPlaybackState(int state, Action<PlaybackStateCompat.Builder> configure = null)
+        public RadioStationMediaSession SetPlaybackState(int state, TimeSpan position = default, Action<PlaybackStateCompat.Builder> configure = null)
         {
+            var positionMS = position == default ? -1 : (long)Math.Ceiling(position.TotalMilliseconds);
             var builder = new PlaybackStateCompat.Builder()
-                            .SetActions(PlaybackStateCompat.ActionPlay | PlaybackStateCompat.ActionStop)
-                            .SetState(state, -1, 1.0f, SystemClock.ElapsedRealtime());
+                            .SetActions(PlaybackStateCompat.ActionPlay | PlaybackStateCompat.ActionPause)
+                            .SetState(state, positionMS, 1.0f, SystemClock.ElapsedRealtime());
 
             configure?.Invoke(builder);
 
             _session.SetPlaybackState(builder.Build());
+
+            return this;
         }
 
         class MediaSessionCallback : MediaSessionCompat.Callback

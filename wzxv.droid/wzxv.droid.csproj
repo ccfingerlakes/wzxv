@@ -69,17 +69,21 @@
     <Compile Include="ContactConnector.cs" />
     <Compile Include="ControlExtensions.cs" />
     <Compile Include="CsvReader.cs" />
+    <Compile Include="Globalization.cs" />
     <Compile Include="NetworkStatus.cs" />
     <Compile Include="RadioStationMediaSession.cs" />
     <Compile Include="RadioStationNotificationManager.cs" />
     <Compile Include="RadioStationPlayer.cs" />
     <Compile Include="RadioStationSchedule.cs" />
+    <Compile Include="RadioStationScheduleReader.cs" />
+    <Compile Include="RadioStationScheduleService.cs" />
     <Compile Include="RadioStationService.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="RadioStationServiceLock.cs" />
     <Compile Include="RadioStationBroadcastReceiver.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ServiceConnection.cs" />
     <Compile Include="SocialConnector.cs" />
   </ItemGroup>
   <ItemGroup>

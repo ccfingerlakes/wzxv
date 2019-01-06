@@ -22,7 +22,7 @@ using Com.Google.Android.Exoplayer2.Util;
 
 namespace wzxv
 {
-    [Service(Name = "wzxv.app.radio")]
+    [Service]
     [IntentFilter(new [] {  ActionPlay, ActionStop })]
     public class RadioStationService : Service
     {
@@ -34,8 +34,7 @@ namespace wzxv
         private const string TAG = "wzxv.app.radio";
         private const int NotificationId = 1;
 
-        public event EventHandler<RadioStationDurationEventArgs> Duration;
-        public event EventHandler<RadioStationServiceMetadataChangedEventArgs> MetadataChanged;
+        public event EventHandler Playing;
         public event EventHandler StateChanged;
         public event EventHandler<RadioStationErrorEventArgs> Error;
 
@@ -43,12 +42,10 @@ namespace wzxv
         private RadioStationPlayer _player;
         private RadioStationNotificationManager _notificationManager;
         private RadioStationMediaSession _mediaSession;
-        private RadioStationSchedule _schedule;
+        private RadioStationScheduleService _schedule;
         private RadioStationServiceLock _lock;
-        private RadioStationServiceBinder _binder;
-        private Handler _refreshHandler = new Handler();
-        private NowPlaying _nowPlaying;
-
+        private Handler _playingHandler = new Handler();
+        
         public bool IsPlaying => _player != null && _player.IsPlaying;
 
         public override void OnCreate()
@@ -56,27 +53,49 @@ namespace wzxv
             base.OnCreate();
             _mediaSession = new RadioStationMediaSession(this);
             _notificationManager = new RadioStationNotificationManager(this);
-            _schedule = new RadioStationSchedule(OnScheduleChanged);
+
+            if (_schedule == null)
+            {
+                var intent = new Intent(ApplicationContext, typeof(RadioStationScheduleService));
+                var connection = new ServiceConnection<RadioStationScheduleServiceBinder>(binder =>
+                {
+                    if (binder == default)
+                    {
+                        if (_schedule != null)
+                        {
+                            _schedule.Changed -= OnScheduleChanged;
+                        }
+
+                        _schedule = null;
+                    }
+                    else
+                    {
+                        _schedule = binder.Service;
+                        _schedule.Changed += OnScheduleChanged;
+                    }
+                });
+                BindService(intent, connection, Bind.AutoCreate);
+            }   
+
             _player = new RadioStationPlayer(this);
             _player.StateChanged += OnPlayerStateChanged;
             _player.Error += OnPlayerError;
-            _refreshHandler.Post(OnRefresh);
+            _playingHandler.Post(OnPlaying);
         }
 
         public override IBinder OnBind(Intent intent)
         {
-            _binder = new RadioStationServiceBinder(this);
-            return _binder;
+            return new RadioStationServiceBinder(this);
         }
 
         public override void OnDestroy()
         {
             base.OnDestroy();
 
-            if (_refreshHandler != null)
+            if (_playingHandler != null)
             {
-                _refreshHandler.Dispose();
-                _refreshHandler = null;
+                _playingHandler.Dispose();
+                _playingHandler = null;
             }
 
             if (_player != null)
@@ -143,7 +162,6 @@ namespace wzxv
                 {
                     _lock = new RadioStationServiceLock(this);
                     _player.Start();
-                    _schedule.Refresh(force: true);
                 }
                 catch (Exception ex)
                 {
@@ -190,14 +208,14 @@ namespace wzxv
             }
         }
 
-        void OnRefresh()
+        void OnPlaying()
         {
-            if (_refreshHandler != null)
+            if (_playingHandler != null)
             {
-                if (_nowPlaying != null)
-                    Duration?.Invoke(this, new RadioStationDurationEventArgs(_nowPlaying.Duration, _nowPlaying.Position));
+                if (_schedule?.NowPlaying != null)
+                    Playing?.Invoke(this, EventArgs.Empty);
 
-                _refreshHandler.PostDelayed(OnRefresh, 500);
+                _playingHandler.PostDelayed(OnPlaying, 500);
             }
         }
 
@@ -205,7 +223,7 @@ namespace wzxv
         {
             if (_player.IsPlaying)
             {
-                _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying);
+                _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying, (_schedule?.NowPlaying?.Position ?? default));
             }
             else
             {
@@ -224,39 +242,37 @@ namespace wzxv
             Error?.Invoke(this, e);
         }
 
-        void OnScheduleChanged(RadioStationSchedule.Slot slot, DateTimeOffset started, TimeSpan duration)
+        void OnScheduleChanged(object sender, EventArgs e)
         {
-            _nowPlaying = new NowPlaying()
-            {
-                Slot = slot,
-                Duration = duration,
-                Start = started,
-                End = started.Add(duration)
-            };
-
             UpdateNotification();
-
-            if (_mediaSession != null)
-            {
-                _mediaSession.SetMetadata(slot.Artist, slot.Title, builder =>
-                {
-                    if (slot.ImageUrl != null)
-                        builder.PutString(MediaMetadata.MetadataKeyAlbumArtUri, slot.ImageUrl);
-                });
-            }
-
-            MetadataChanged?.Invoke(this, new RadioStationServiceMetadataChangedEventArgs(slot.Artist, slot.Title, slot.Url, slot.ImageUrl));
         }
 
         void UpdateNotification()
         {
+            var playing = _schedule?.NowPlaying;
+            var slot = playing?.Slot;
+
+            if (_mediaSession != null && slot != null)
+            {
+                _mediaSession.SetMetadata(slot.Artist, slot.Title, playing.Duration, builder =>
+                {
+                    if (slot.ImageUrl != null)
+                        builder.PutString(MediaMetadata.MetadataKeyAlbumArtUri, slot.ImageUrl);
+                });
+
+                if (_player.IsPlaying)
+                {
+                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying, playing.Position);
+                }
+            }
+
             _notificationManager.Notify(NotificationId, builder =>
             {
-                if (_nowPlaying != null)
+                if (slot != null)
                 {
                     builder
-                        .SetContentTitle(_nowPlaying.Slot.Title)
-                        .SetContentText(_nowPlaying.Slot.Artist);
+                        .SetContentTitle(slot.Title)
+                        .SetContentText(slot.Artist);
                 }
 
                 if (IsPlaying)
@@ -268,45 +284,6 @@ namespace wzxv
                     builder.AddAction(_notificationManager.CreateAction(Android.Resource.Drawable.IcMediaPlay, "Play", ActionPlay));
                 }
             });
-        }
-
-        class NowPlaying
-        {
-            public RadioStationSchedule.Slot Slot;
-            public TimeSpan Duration;
-            public DateTimeOffset Start;
-            public DateTimeOffset End;
-
-            public TimeSpan Position => DateTimeOffset.Now.Subtract(Start);
-        }
-    }
-
-    public struct RadioStationServiceMetadataChangedEventArgs
-    {
-        public string Artist { get; private set; }
-        public string Title { get; private set; }
-        public string Url { get; private set; }
-        public string ImageUrl { get; private set; }
-
-        public RadioStationServiceMetadataChangedEventArgs(string artist, string title, string url, string imageUrl)
-        {
-            Artist = artist;
-            Title = title;
-            Url = url;
-            ImageUrl = imageUrl;
-        }
-    }
-
-    public struct RadioStationDurationEventArgs
-    {
-        public TimeSpan Duration { get; private set; }
-        public TimeSpan Position { get; private set; }
-        public TimeSpan Remaining => Duration.Subtract(Position);
-
-        public RadioStationDurationEventArgs(TimeSpan duration, TimeSpan position)
-        {
-            Duration = duration;
-            Position = position;
         }
     }
 

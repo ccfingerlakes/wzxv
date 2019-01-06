@@ -26,12 +26,18 @@ namespace wzxv
     [IntentFilter(new [] {  ActionPlay, ActionStop })]
     public class RadioStationService : Service
     {
+        public const string ExtraKeyForce = "wzxv.app.radio.FORCE";
         public const string ActionPlay = "wzxv.app.radio.PLAY";
         public const string ActionStop = "wzxv.app.radio.STOP";
         public const string ActionToggle = "wzxv.app.radio.TOGGLE";
 
         private const string TAG = "wzxv.app.radio";
         private const int NotificationId = 1;
+
+        public event EventHandler<RadioStationDurationEventArgs> Duration;
+        public event EventHandler<RadioStationServiceMetadataChangedEventArgs> MetadataChanged;
+        public event EventHandler StateChanged;
+        public event EventHandler<RadioStationErrorEventArgs> Error;
 
         private int _startId;
         private RadioStationPlayer _player;
@@ -40,12 +46,9 @@ namespace wzxv
         private RadioStationSchedule _schedule;
         private RadioStationServiceLock _lock;
         private RadioStationServiceBinder _binder;
+        private Handler _refreshHandler = new Handler();
+        private NowPlaying _nowPlaying;
 
-        public event EventHandler<RadioStationServiceMetadataChangedEventArgs> MetadataChanged;
-        public event EventHandler StateChanged;
-        public event EventHandler<RadioStationErrorEventArgs> Error;
-
-        
         public bool IsPlaying => _player != null && _player.IsPlaying;
 
         public override void OnCreate()
@@ -57,6 +60,7 @@ namespace wzxv
             _player = new RadioStationPlayer(this);
             _player.StateChanged += OnPlayerStateChanged;
             _player.Error += OnPlayerError;
+            _refreshHandler.Post(OnRefresh);
         }
 
         public override IBinder OnBind(Intent intent)
@@ -68,6 +72,12 @@ namespace wzxv
         public override void OnDestroy()
         {
             base.OnDestroy();
+
+            if (_refreshHandler != null)
+            {
+                _refreshHandler.Dispose();
+                _refreshHandler = null;
+            }
 
             if (_player != null)
             {
@@ -109,7 +119,7 @@ namespace wzxv
                 _startId = startId;
             }
 
-            switch (intent.Action)
+            switch (intent?.Action)
             {
                 case ActionPlay:
                 case ActionToggle when !IsPlaying:
@@ -118,7 +128,7 @@ namespace wzxv
 
                 case ActionStop:
                 case ActionToggle when IsPlaying:
-                    Stop();
+                    Stop(intent.HasExtra(ExtraKeyForce));
                     break;
             }
 
@@ -151,7 +161,7 @@ namespace wzxv
             }
         }
 
-        public void Stop()
+        public void Stop(bool force = false)
         {
             try
             {
@@ -173,10 +183,21 @@ namespace wzxv
                     _lock = null;
                 }
 
-                StopForeground(false);
+                StopForeground(force);
                 StopSelf(_startId);
 
                 _startId = 0;
+            }
+        }
+
+        void OnRefresh()
+        {
+            if (_refreshHandler != null)
+            {
+                if (_nowPlaying != null)
+                    Duration?.Invoke(this, new RadioStationDurationEventArgs(_nowPlaying.Duration, _nowPlaying.Position));
+
+                _refreshHandler.PostDelayed(OnRefresh, 500);
             }
         }
 
@@ -203,10 +224,15 @@ namespace wzxv
             Error?.Invoke(this, e);
         }
 
-        private RadioStationSchedule.Slot _slot;
-        void OnScheduleChanged(RadioStationSchedule.Slot slot)
+        void OnScheduleChanged(RadioStationSchedule.Slot slot, DateTimeOffset started, TimeSpan duration)
         {
-            _slot = slot;
+            _nowPlaying = new NowPlaying()
+            {
+                Slot = slot,
+                Duration = duration,
+                Start = started,
+                End = started.Add(duration)
+            };
 
             UpdateNotification();
 
@@ -226,11 +252,11 @@ namespace wzxv
         {
             _notificationManager.Notify(NotificationId, builder =>
             {
-                if (_slot != null)
+                if (_nowPlaying != null)
                 {
                     builder
-                        .SetContentTitle(_slot.Title)
-                        .SetContentText(_slot.Artist);
+                        .SetContentTitle(_nowPlaying.Slot.Title)
+                        .SetContentText(_nowPlaying.Slot.Artist);
                 }
 
                 if (IsPlaying)
@@ -242,6 +268,16 @@ namespace wzxv
                     builder.AddAction(_notificationManager.CreateAction(Android.Resource.Drawable.IcMediaPlay, "Play", ActionPlay));
                 }
             });
+        }
+
+        class NowPlaying
+        {
+            public RadioStationSchedule.Slot Slot;
+            public TimeSpan Duration;
+            public DateTimeOffset Start;
+            public DateTimeOffset End;
+
+            public TimeSpan Position => DateTimeOffset.Now.Subtract(Start);
         }
     }
 
@@ -258,6 +294,19 @@ namespace wzxv
             Title = title;
             Url = url;
             ImageUrl = imageUrl;
+        }
+    }
+
+    public struct RadioStationDurationEventArgs
+    {
+        public TimeSpan Duration { get; private set; }
+        public TimeSpan Position { get; private set; }
+        public TimeSpan Remaining => Duration.Subtract(Position);
+
+        public RadioStationDurationEventArgs(TimeSpan duration, TimeSpan position)
+        {
+            Duration = duration;
+            Position = position;
         }
     }
 

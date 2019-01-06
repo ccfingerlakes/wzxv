@@ -66,7 +66,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AppCenterEvents.cs" />
-    <Compile Include="AudioVolumeObserver.cs" />
     <Compile Include="ContactConnector.cs" />
     <Compile Include="ControlExtensions.cs" />
     <Compile Include="CsvReader.cs" />

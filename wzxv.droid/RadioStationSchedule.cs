@@ -29,11 +29,11 @@ namespace wzxv
 
         public event EventHandler<RadioStationScheduleChangedEventArgs> Changed;
 
-        public RadioStationSchedule(Action<Slot> onChanged = null)
+        public RadioStationSchedule(Action<Slot, DateTimeOffset, TimeSpan> onChanged = null)
         {
             if (onChanged != null)
             {
-                Changed += (_, e) => onChanged(e.Current);
+                Changed += (_, e) => onChanged(e.Current, e.Started, e.Duration);
             }
 
             _timer = new Timer()
@@ -71,12 +71,12 @@ namespace wzxv
             {
                 var interval = TimeSpan.FromMinutes(1);
 
-                if (TryGet(out var current, out var next))
+                if (TryGet(out var current, out var started, out var duration, out var next))
                 {
                     if (_previous != current)
                     {
                         _previous = current;
-                        Changed?.Invoke(this, new RadioStationScheduleChangedEventArgs(current));
+                        Changed?.Invoke(this, new RadioStationScheduleChangedEventArgs(current, started, duration));
                     }
 
                     interval = next;
@@ -92,7 +92,7 @@ namespace wzxv
             _timer.Dispose();
         }
 
-        bool TryGet(out Slot slot, out TimeSpan next)
+        bool TryGet(out Slot slot, out DateTimeOffset started, out TimeSpan duration, out TimeSpan next)
         {
             var now = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, _est);
             var schedule = _slots
@@ -103,19 +103,24 @@ namespace wzxv
                             })
                             .ToArray();
 
-            slot = schedule
+            var currentSlot = schedule
                     .Where(i => i.Current <= now)
                     .OrderByDescending(i => i.Current)
                     .Take(1)
-                    .Select(i => i.Slot)
                     .FirstOrDefault();
 
-            next = schedule
+            slot = currentSlot.Slot;
+            started = currentSlot.Current.ToLocalTime();
+
+            var nextSlot = schedule
                     .Where(i => i.Next > now)
                     .OrderBy(i => i.Next)
                     .Take(1)
                     .Select(i => i.Next)
-                    .FirstOrDefault()
+                    .FirstOrDefault();
+
+            duration = nextSlot.Subtract(started);
+            next = nextSlot
                     .Subtract(now)
                     .Add(TimeSpan.FromSeconds(1));
 
@@ -262,10 +267,14 @@ namespace wzxv
     public class RadioStationScheduleChangedEventArgs : EventArgs
     {
         public RadioStationSchedule.Slot Current { get; private set; }
+        public DateTimeOffset Started { get; private set; }
+        public TimeSpan Duration { get; private set; }
 
-        public RadioStationScheduleChangedEventArgs(RadioStationSchedule.Slot current)
+        public RadioStationScheduleChangedEventArgs(RadioStationSchedule.Slot current, DateTimeOffset started, TimeSpan duration)
         {
             Current = current;
+            Started = started;
+            Duration = duration;
         }
     }
 }

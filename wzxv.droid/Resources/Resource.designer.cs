@@ -2705,6 +2705,18 @@ namespace wzxv
 			// aapt resource value: 0x7f0900b3
 			public const int notification_main_column_container = 2131296435;
 			
+			// aapt resource value: 0x7f09009b
+			public const int nowPlaying = 2131296411;
+			
+			// aapt resource value: 0x7f09009c
+			public const int nowPlayingLength = 2131296412;
+			
+			// aapt resource value: 0x7f09009d
+			public const int nowPlayingProgress = 2131296413;
+			
+			// aapt resource value: 0x7f09009e
+			public const int nowPlayingRemaining = 2131296414;
+			
 			// aapt resource value: 0x7f09004c
 			public const int parallax = 2131296332;
 			
@@ -2935,18 +2947,6 @@ namespace wzxv
 			
 			// aapt resource value: 0x7f0900bf
 			public const int visible = 2131296447;
-			
-			// aapt resource value: 0x7f09009d
-			public const int volumeBar = 2131296413;
-			
-			// aapt resource value: 0x7f09009b
-			public const int volumeControls = 2131296411;
-			
-			// aapt resource value: 0x7f09009e
-			public const int volumeMaxButton = 2131296414;
-			
-			// aapt resource value: 0x7f09009c
-			public const int volumeMinButton = 2131296412;
 			
 			// aapt resource value: 0x7f0900a2
 			public const int websiteButton = 2131296418;

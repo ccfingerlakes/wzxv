@@ -69,6 +69,7 @@
     <Compile Include="AudioVolumeObserver.cs" />
     <Compile Include="ContactConnector.cs" />
     <Compile Include="ControlExtensions.cs" />
+    <Compile Include="CsvReader.cs" />
     <Compile Include="NetworkStatus.cs" />
     <Compile Include="RadioStationMediaSession.cs" />
     <Compile Include="RadioStationNotificationManager.cs" />

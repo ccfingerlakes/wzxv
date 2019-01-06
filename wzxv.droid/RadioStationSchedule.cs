@@ -19,8 +19,7 @@ namespace wzxv
     public class RadioStationSchedule : IDisposable
     {
         private const string TAG = "wzxv.app.radio.schedule";
-        private const string ScheduleUrl = "https://drive.google.com/uc?export=download&id=1VHOK768OrBKro49AmfgLzwkSEdm_tWX5";
-        private const string ArtistsUrl = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/master/artists.csv";
+        private const string Url = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/master/schedule.csv";
 
         private readonly object _syncRoot = new object();
         private readonly TimeZoneInfo _est = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
@@ -44,9 +43,9 @@ namespace wzxv
             };
             _timer.Elapsed += OnRefresh;
 
-            Task.Run(() =>
+            Task.Run(async () =>
             {
-                _slots = ReadSlots();
+                _slots = await Read();
                 _timer.Start();
             });
         }
@@ -70,27 +69,17 @@ namespace wzxv
         {
             lock (_syncRoot)
             {
-                (var current, var next) = Get();
+                var interval = TimeSpan.FromMinutes(1);
 
-                if (_previous != current)
+                if (TryGet(out var current, out var next))
                 {
-                    _previous = current;
-                    Changed?.Invoke(this, new RadioStationScheduleChangedEventArgs(current));
-                }
-
-                var now = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, _est);
-                TimeSpan interval = TimeSpan.FromMinutes(1);
-
-                if (next != Slot.DefaultSlot)
-                {
-                    if (next.TimeOfDay < current.TimeOfDay)
+                    if (_previous != current)
                     {
-                        interval = new DateTimeOffset(now.Year, now.Month, now.Day, next.TimeOfDay.Hours, next.TimeOfDay.Minutes, 0, 0, now.Offset).AddDays(1).Subtract(now).Add(TimeSpan.FromSeconds(1));
+                        _previous = current;
+                        Changed?.Invoke(this, new RadioStationScheduleChangedEventArgs(current));
                     }
-                    else
-                    {
-                        interval = new DateTimeOffset(now.Year, now.Month, now.Day, next.TimeOfDay.Hours, next.TimeOfDay.Minutes, 0, 0, now.Offset).Subtract(now).Add(TimeSpan.FromSeconds(1));
-                    }
+
+                    interval = next;
                 }
 
                 _timer.Interval = interval.TotalMilliseconds;
@@ -103,137 +92,117 @@ namespace wzxv
             _timer.Dispose();
         }
 
-        (Slot current, Slot next) Get()
+        bool TryGet(out Slot slot, out TimeSpan next)
         {
-            var time = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, _est);
+            var now = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, _est);
+            var schedule = _slots
+                            .Select(s =>
+                            {
+                                var n = Next(now, s.DayOfWeek, s.TimeOfDay);
+                                return new { Slot = s, Current = n.AddDays(-7), Next = n };
+                            })
+                            .ToArray();
 
-            if (time.DayOfWeek >= DayOfWeek.Monday && time.DayOfWeek <= DayOfWeek.Friday)
-            {
-                var slots = _slots
-                            .Select(s => new { s, d = time.TimeOfDay - s.TimeOfDay })
-                            .OrderBy(i => i.d);
+            slot = schedule
+                    .Where(i => i.Current <= now)
+                    .OrderByDescending(i => i.Current)
+                    .Take(1)
+                    .Select(i => i.Slot)
+                    .FirstOrDefault();
 
-                var current = slots
-                                .Where(i => i.d.TotalSeconds >= 0)
-                                .Select(i => i.s)
-                                .FirstOrDefault();
+            next = schedule
+                    .Where(i => i.Next > now)
+                    .OrderBy(i => i.Next)
+                    .Take(1)
+                    .Select(i => i.Next)
+                    .FirstOrDefault()
+                    .Subtract(now)
+                    .Add(TimeSpan.FromSeconds(1));
 
-                if (current == null)
-                    current = _slots.First();
-
-                var next = slots
-                                .Where(i => i.d.TotalSeconds < 0)
-                                .Select(i => i.s)
-                                .LastOrDefault();
-
-                if (next == null)
-                    current = _slots.First();
-
-                return (current, next);
-            }
-
-            return (Slot.DefaultSlot, Slot.DefaultSlot);
+            return (slot != null);
         }
 
-        static IEnumerable<Slot> ReadSlots()
+        static DateTimeOffset Next(DateTimeOffset date, DayOfWeek dow, TimeSpan tod)
         {
-            (var slots, var artists) = GetHttpContents();
+            if (date.DayOfWeek != dow)
+            {
+                date = date.AddDays((int)dow + 7 - (int)date.DayOfWeek);
+            }
+            else if (date.DayOfWeek == dow && tod <= date.TimeOfDay)
+            {
+                date = date.AddDays(7);
+            }
 
-            if (slots != null)
-                return ParseSlots(slots, artists);
+            return new DateTimeOffset(date.Year, date.Month, date.Day, tod.Hours, tod.Minutes, tod.Seconds, tod.Minutes, date.Offset);
+        }
+
+        static async Task<IEnumerable<Slot>> Read()
+        {
+            using (var client = new HttpClient())
+            {
+                try
+                {
+                    using (var response = await client.GetAsync(Url))
+                    {
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var content = await response.Content.ReadAsStringAsync();
+
+                            if (content != null)
+                                return Parse(content);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(TAG, $"Failed to retrieve schedule metadata: {ex.Message}");
+                    Log.Debug(TAG, ex.ToString());
+                }
+            }
 
             return Array.Empty<Slot>();
         }
 
-        static (string slots, string artists) GetHttpContents()
-        {
-            string slots = null;
-            string artists = null;
-
-            using (var client = new HttpClient())
-            {
-                Task.WhenAll(
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            using (var response = await client.GetAsync(ScheduleUrl))
-                            {
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    slots = await response.Content.ReadAsStringAsync();
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(TAG, $"Failed to retrieve schedule metadata: {ex.Message}");
-                            Log.Debug(TAG, ex.ToString());
-                        }
-                    }),
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            using (var response = await client.GetAsync(ArtistsUrl))
-                            {
-                                if (response.IsSuccessStatusCode)
-                                {
-                                    artists = await response.Content.ReadAsStringAsync();
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Error(TAG, $"Failed to retrieve artists metadata: {ex.Message}");
-                            Log.Debug(TAG, ex.ToString());
-                        }
-                    })
-                ).Wait();
-            }
-
-            return (slots, artists);
-        }
-
-        static IEnumerable<Slot> ParseSlots(string slotsAsString, string artistsAsString)
+        static IEnumerable<Slot> Parse(string content)
         {
             var slots = new List<Slot>();
-            var artists = new Dictionary<string, (string url, string imageUrl)>(StringComparer.InvariantCultureIgnoreCase);
 
-            if (!string.IsNullOrEmpty(artistsAsString))
+            if (!string.IsNullOrEmpty(content))
             {
-                foreach(var line in artistsAsString.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var parts = line.Split(new[] { "," }, StringSplitOptions.RemoveEmptyEntries);
-
-                    if (parts.Length >= 3)
-                    {
-                        artists[parts[0]] = (parts[1], parts[2]);
-                    }
-                }
-            }
-
-            if (!string.IsNullOrEmpty(slotsAsString))
-            {
-                var parts = slotsAsString.Split(new[] { "\n" }, StringSplitOptions.RemoveEmptyEntries);
                 var culture = CultureInfo.GetCultureInfo("en-US");
 
-                for (var i = 0; i + 2 <= parts.Length; i += 3)
+                foreach (var row in CsvReader.Parse(content))
                 {
-                    var time = parts[i].TrimStart('@').TrimEnd(';').Trim();
-                    var artist = parts[i + 1].TrimEnd(';').Trim();
-                    var title = parts[i + 2].TrimEnd(';').Trim();
-                    string url = null;
-                    string imageUrl = null;
-
-                    if (artists.ContainsKey(artist))
+                    if (row.Length < 4)
                     {
-                        (url, imageUrl) = artists[artist];
+                        Log.Warn(TAG, $"Invalid row length ({row.Length}) detected; the row will be skipped");
                     }
-
-                    if (DateTime.TryParseExact(time, "h:mmtt", culture, DateTimeStyles.None, out var date))
+                    else if (row[0].Equals("Weekday", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        slots.Add(new Slot(date.TimeOfDay, artist, title, url, imageUrl));
+                        row[0] = DayOfWeek.Monday.ToString();
+                        if (TryParse(row, culture, out var monday))
+                            slots.Add(monday);
+
+                        row[0] = DayOfWeek.Tuesday.ToString();
+                        if (TryParse(row, culture, out var tuesday))
+                            slots.Add(tuesday);
+
+                        row[0] = DayOfWeek.Wednesday.ToString();
+                        if (TryParse(row, culture, out var wednesday))
+                            slots.Add(wednesday);
+
+                        row[0] = DayOfWeek.Thursday.ToString();
+                        if (TryParse(row, culture, out var thursday))
+                            slots.Add(thursday);
+
+                        row[0] = DayOfWeek.Friday.ToString();
+                        if (TryParse(row, culture, out var friday))
+                            slots.Add(friday);
+                    }
+                    else
+                    {
+                        if (TryParse(row, culture, out var slot))
+                            slots.Add(slot);
                     }
                 }
             }
@@ -241,19 +210,47 @@ namespace wzxv
             return slots;
         }
 
+        static bool TryParse(string[] values, CultureInfo culture, out Slot slot)
+        {
+            slot = null;
+
+            if (Enum.TryParse<DayOfWeek>(values[0], out var dow))
+            {
+                if (TimeSpan.TryParseExact(values[1], "h\\:mm", culture, out var tod))
+                {
+                    var url = values.Length >= 5 ? values[4] : null;
+                    var imageUrl = values.Length >= 6 ? values[5] : null;
+
+                    slot = new Slot(dow, tod, values[3], values[2], url, imageUrl);
+
+                    return true;
+                }
+                else
+                {
+                    Log.Warn(TAG, $"Invalid TimeOfDay '{values[1]}'; the row will be skipped");
+                }
+            }
+            else
+            {
+                Log.Warn(TAG, $"Invalid DayOfWeek '{values[0]}'; the row will be skipped");
+            }
+
+            return false;
+        }
+
         public class Slot
         {
-            public readonly static Slot DefaultSlot = new Slot(TimeSpan.Zero, "WZXV", "The Word", "http://wzxv.org", null);
-
+            public DayOfWeek DayOfWeek { get; private set; }
             public TimeSpan TimeOfDay { get; private set; }
             public string Artist { get; private set; }
             public string Title { get; private set; }
             public string Url { get; private set; }
             public string ImageUrl { get; private set; }
 
-            public Slot(TimeSpan timeOfDay, string artist, string title, string url, string imageUrl)
+            public Slot(DayOfWeek dow, TimeSpan tod, string artist, string title, string url, string imageUrl)
             {
-                TimeOfDay = timeOfDay;
+                DayOfWeek = dow;
+                TimeOfDay = tod;
                 Artist = artist;
                 Title = title;
                 Url = url;

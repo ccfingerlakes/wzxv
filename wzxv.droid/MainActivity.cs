@@ -34,7 +34,8 @@ namespace wzxv
         
         protected override void OnCreate(Bundle savedInstanceState)
         {
-            AppCenter.Start("f5115ef1-a47c-437e-8d62-9899be633736", typeof(Analytics), typeof(Crashes));
+            if (!string.IsNullOrEmpty(AppCenterConfig.AppSecret))
+                AppCenter.Start(AppCenterConfig.AppSecret, typeof(Analytics), typeof(Crashes));
 
             base.Window.RequestFeature(Android.Views.WindowFeatures.ActionBar);
             base.SetTheme(Resource.Style.AppTheme);

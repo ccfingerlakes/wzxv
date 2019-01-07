@@ -65,6 +65,7 @@
     <Reference Include="Mono.Android" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AppCenterConfig.cs" />
     <Compile Include="AppCenterEvents.cs" />
     <Compile Include="ContactConnector.cs" />
     <Compile Include="ControlExtensions.cs" />

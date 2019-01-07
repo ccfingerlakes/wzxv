@@ -12,7 +12,7 @@ using Android.Widget;
 
 namespace wzxv
 {
-    static class Globalization
+    static class Localization
     {
         public static readonly TimeZoneInfo EasternStandardTime = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
@@ -20,5 +20,8 @@ namespace wzxv
 
         public static DateTimeOffset ToToday(this DateTimeOffset date)
             => new DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, date.Offset);
+
+        public static DateTimeOffset ToEasternStandardTime(this DateTimeOffset date)
+            => TimeZoneInfo.ConvertTime(date, EasternStandardTime);
     }
 }

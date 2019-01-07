@@ -13,15 +13,20 @@ using Android.Widget;
 
 namespace wzxv
 {
-    class NetworkStatus
+    class NetworkStatus : IDisposable
     {
+        private readonly Context _context;
         private readonly ConnectivityManager _manager;
-        
+        private NetworkStatusBroadcastReceiver _receiver;
+
         public event EventHandler<EventArgs> Connected;
         public event EventHandler<EventArgs> Disconnected;
 
+        public bool IsConnected => _manager.ActiveNetworkInfo?.IsConnected == true;
+
         public NetworkStatus(Context context, Action connected = null, Action disconnected = null)
         {
+            _context = context;
             _manager = (ConnectivityManager)context.GetSystemService(Context.ConnectivityService);
 
             if (connected != null)
@@ -29,11 +34,18 @@ namespace wzxv
             if (disconnected != null)
                 Disconnected += (_, __) => disconnected();
             
-            var receiver = new NetworkStatusBroadcastReceiver(OnNetworkStatusChanged);
-            context.RegisterReceiver(receiver, new IntentFilter(ConnectivityManager.ConnectivityAction));
+            _receiver = new NetworkStatusBroadcastReceiver(OnNetworkStatusChanged);
+            _context.RegisterReceiver(_receiver, new IntentFilter(ConnectivityManager.ConnectivityAction));
         }
 
-        public bool IsConnected => _manager.ActiveNetworkInfo != null && _manager.ActiveNetworkInfo.IsConnected;
+        public void Dispose()
+        {
+            if (_receiver != null)
+            {
+                _context.UnregisterReceiver(_receiver);
+                _receiver = null;
+            }
+        }
 
         void OnNetworkStatusChanged()
         {

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 using Android.App;
@@ -23,50 +24,39 @@ namespace wzxv
 
         public bool TryGetCurrent(out Slot current, out DateTimeOffset start, out TimeSpan duration, out TimeSpan interval)
         {
-            var now = TimeZoneInfo.ConvertTime(DateTimeOffset.Now, Globalization.EasternStandardTime);
+            current = null;
+            start = default(DateTimeOffset);
+            duration = default(TimeSpan);
+            interval = default(TimeSpan);
 
-            var schedule = _schedule.Select(s =>
+            if (_schedule.Length > 0)
             {
-                var n = Next(now, s.DayOfWeek, s.TimeOfDay);
-                return (Slot: s, LastPlayed: n.AddDays(-7), NextPlay: n);
-            });
+                var now = DateTimeOffset.Now.ToEasternStandardTime();
+                var schedule = _schedule.Select(s => (Slot: s, Schedule: GetNextDateTime(now, s.DayOfWeek, s.TimeOfDay))).OrderBy(i => i.Schedule);
+                var last = schedule.LastOrDefault();
+                var next = schedule.FirstOrDefault();
 
-            var currentSlot = schedule
-                    .Where(i => i.LastPlayed <= now)
-                    .OrderByDescending(i => i.LastPlayed)
-                    .Take(1)
-                    .FirstOrDefault();
-
-            current = currentSlot.Slot;
-            start = currentSlot.LastPlayed.ToLocalTime();
-
-            var nextSlot = schedule
-                    .Where(i => i.NextPlay > now)
-                    .OrderBy(i => i.NextPlay)
-                    .Take(1)
-                    .Select(i => i.NextPlay)
-                    .FirstOrDefault();
-
-            duration = nextSlot.Subtract(start).Add(TimeSpan.FromSeconds(1));
-            interval = nextSlot
-                    .Subtract(now)
-                    .Subtract(TimeSpan.FromSeconds(1));
+                current = last.Slot;
+                start = last.Schedule.Subtract(TimeSpan.FromDays(7)).ToLocalTime();
+                duration = next.Schedule.Subtract(start);
+                interval = next.Schedule.Subtract(now);
+            }
 
             return (current != null);
         }
 
-        static DateTimeOffset Next(DateTimeOffset date, DayOfWeek dow, TimeSpan tod)
+        static DateTimeOffset GetNextDateTime(DateTimeOffset date, DayOfWeek dow, TimeSpan tod)
         {
             if (date.DayOfWeek != dow)
             {
-                date = date.AddDays((int)dow + 7 - (int)date.DayOfWeek);
+                date = date.AddDays(((int)dow + 7 - (int)date.DayOfWeek) % 7);
             }
-            else if (date.DayOfWeek == dow && tod <= date.TimeOfDay)
+            else if (tod <= date.TimeOfDay)
             {
                 date = date.AddDays(7);
             }
 
-            return new DateTimeOffset(date.Year, date.Month, date.Day, tod.Hours, tod.Minutes, tod.Seconds, tod.Minutes, date.Offset);
+            return new DateTimeOffset(date.Year, date.Month, date.Day, tod.Hours, tod.Minutes, tod.Seconds, tod.Milliseconds, date.Offset);
         }
 
         public class Slot

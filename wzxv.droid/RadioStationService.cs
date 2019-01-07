@@ -39,6 +39,7 @@ namespace wzxv
         public event EventHandler<RadioStationErrorEventArgs> Error;
 
         private int _startId;
+        private List<IServiceConnection> _connections = new List<IServiceConnection>();
         private RadioStationPlayer _player;
         private RadioStationNotificationManager _notificationManager;
         private RadioStationMediaSession _mediaSession;
@@ -57,24 +58,24 @@ namespace wzxv
             if (_schedule == null)
             {
                 var intent = new Intent(ApplicationContext, typeof(RadioStationScheduleService));
-                var connection = new ServiceConnection<RadioStationScheduleServiceBinder>(binder =>
+                var connection = ServiceConnectionFactory.Create<RadioStationScheduleService>(service =>
                 {
-                    if (binder == null)
+                    if (service != null)
                     {
-                        if (_schedule != null)
-                        {
-                            _schedule.Changed -= OnScheduleChanged;
-                        }
-
-                        _schedule = null;
-                    }
-                    else
-                    {
-                        _schedule = binder.Service;
+                        _schedule = service;
                         _schedule.Changed += OnScheduleChanged;
                     }
+                    else if (_schedule != null)
+                    {
+                        _schedule.Changed -= OnScheduleChanged;
+                        _schedule = null;
+                    }
                 });
-                BindService(intent, connection, Bind.AutoCreate);
+
+                if (BindService(intent, connection, Bind.AutoCreate))
+                {
+                    _connections.Add(connection);
+                }
             }   
 
             _player = new RadioStationPlayer(this);
@@ -85,12 +86,18 @@ namespace wzxv
 
         public override IBinder OnBind(Intent intent)
         {
-            return new RadioStationServiceBinder(this);
+            return new ServiceBinder<RadioStationService>(this);
         }
 
         public override void OnDestroy()
         {
-            base.OnDestroy();
+            if (_connections != null)
+            {
+                foreach (var connection in _connections)
+                    UnbindService(connection);
+
+                _connections = null;
+            }
 
             if (_playingHandler != null)
             {
@@ -121,6 +128,8 @@ namespace wzxv
                 _mediaSession.Dispose();
                 _mediaSession = null;
             }
+
+            base.OnDestroy();
         }
 
         public override StartCommandResult OnStartCommand(Intent intent, StartCommandFlags flags, int startId)
@@ -221,13 +230,16 @@ namespace wzxv
 
         void OnPlayerStateChanged(object sender, EventArgs e)
         {
-            if (_player.IsPlaying)
+            if (_mediaSession != null)
             {
-                _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying, (_schedule?.NowPlaying?.Position ?? default(TimeSpan)));
-            }
-            else
-            {
-                _mediaSession.SetPlaybackState(PlaybackStateCompat.StateStopped);
+                if (_player.IsPlaying)
+                {
+                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StatePlaying, (_schedule?.NowPlaying?.Position ?? default(TimeSpan)));
+                }
+                else
+                {
+                    _mediaSession.SetPlaybackState(PlaybackStateCompat.StateStopped);
+                }
             }
 
             UpdateNotification();
@@ -237,7 +249,7 @@ namespace wzxv
 
         void OnPlayerError(object sender, RadioStationErrorEventArgs e)
         {
-            _mediaSession.SetPlaybackState(PlaybackStateCompat.StateError);
+            _mediaSession?.SetPlaybackState(PlaybackStateCompat.StateError);
             Stop();
             Error?.Invoke(this, e);
         }
@@ -266,7 +278,7 @@ namespace wzxv
                 }
             }
 
-            _notificationManager.Notify(NotificationId, builder =>
+            _notificationManager?.Notify(NotificationId, builder =>
             {
                 if (slot != null)
                 {
@@ -284,16 +296,6 @@ namespace wzxv
                     builder.AddAction(_notificationManager.CreateAction(Android.Resource.Drawable.IcMediaPlay, "Play", ActionPlay));
                 }
             });
-        }
-    }
-
-    public class RadioStationServiceBinder : Binder
-    {
-        public RadioStationService Service { get; private set; }
-
-        public RadioStationServiceBinder(RadioStationService service)
-        {
-            Service = service;
         }
     }
 }

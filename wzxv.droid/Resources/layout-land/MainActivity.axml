@@ -10,23 +10,23 @@
 		android:contentDescription="WZXV - The Word"
 		android:src="@drawable/logo"
 		android:layout_width="match_parent"
-		android:layout_height="156dp"
+		android:layout_height="100dp"
 		android:layout_margin="16dp"
 		android:layout_weight="0"
 		android:id="@+id/logo" />
 	<LinearLayout
-		android:orientation="vertical"
+		android:orientation="horizontal"
 		android:layout_width="match_parent"
 		android:layout_height="fill_parent"
 		android:layout_weight="1"
 		android:gravity="center">
 		<LinearLayout
 			android:orientation="horizontal"
-			android:layout_width="match_parent"
-			android:layout_height="wrap_content"
+			android:layout_width="wrap_content"
+			android:layout_height="match_parent"
 			android:layout_marginLeft="4dp"
 			android:layout_marginRight="4dp"
-			android:gravity="top|center">
+			android:gravity="center">
 			<ImageView
 				android:contentDescription="Now Playing"
 				android:src="@drawable/logo"
@@ -92,6 +92,7 @@
 					android:layout_width="fill_parent"
 					android:layout_height="4dp"
 					android:layout_weight="1"
+					android:layout_marginTop="-3dp"
 					android:contentDescription="Time Remaining"
 					android:progressTint="@android:color/white"
 					android:progressBackgroundTint="@android:color/white"
@@ -104,7 +105,7 @@
 			android:src="@drawable/play"
 			android:layout_width="80dp"
 			android:layout_height="80dp"
-			android:layout_marginTop="16dp"
+			android:layout_marginLeft="16dp"
 			android:id="@+id/mediaButton" />
 	</LinearLayout>
 	<LinearLayout

@@ -8,6 +8,7 @@ using Android.App;
 using Android.Content;
 using Android.OS;
 using Android.Runtime;
+using Android.Util;
 using Android.Views;
 using Android.Widget;
 
@@ -15,32 +16,29 @@ namespace wzxv
 {
     static class ControlExtensions
     {
+        private const string TAG = "wzxv.app.controls.extensions";
+
         private static readonly HttpClient __http = new HttpClient();
 
-        public static T Configure<T>(this T control, Action<T> configure)
-            where T : Android.Views.View
-        {
-            configure(control);
-            return control;
-        }
-
-        public static async Task<T> ConfigureAsync<T>(this T control, Func<T, Task> configure)
-            where T : Android.Views.View
-        {
-            await configure(control);
-            return control;
-        }
-
-        public static async Task<T> SetBitmapFromUrl<T>(this T view, string url)
+        public static async Task<T> TrySetBitmapFromUrl<T>(this T view, string url, int resId)
             where T : ImageView
         {
-            using (var response = await __http.GetAsync(url))
+            try
             {
-                if (response.IsSuccessStatusCode)
+                using (var response = await __http.GetAsync(url))
                 {
-                    using (var stream = await response.Content.ReadAsStreamAsync())
-                        view.SetImageBitmap(Android.Graphics.BitmapFactory.DecodeStream(stream));
+                    if (response.IsSuccessStatusCode)
+                    {
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                            view.SetImageBitmap(Android.Graphics.BitmapFactory.DecodeStream(stream));
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(TAG, $"Could not load image from url '{url}': {ex.Message}");
+                Log.Debug(TAG, ex.ToString());
+                view.SetImageResource(resId);
             }
 
             return view;

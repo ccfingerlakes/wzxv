@@ -49,13 +49,16 @@ namespace wzxv
 
         public override void OnDestroy()
         {
-            _timer.Dispose();
+            if (_timer != null)
+            {
+                _timer.Dispose();
+            }
             base.OnDestroy();
         }
 
         public override IBinder OnBind(Intent intent)
         {
-            return new RadioStationScheduleServiceBinder(this);
+            return new ServiceBinder<RadioStationScheduleService>(this);
         }
 
         void OnRefresh(object sender, ElapsedEventArgs e)
@@ -87,23 +90,13 @@ namespace wzxv
         public RadioStationSchedule.Slot Slot { get; private set; }
         public TimeSpan Duration { get; private set; }
         public TimeSpan Position => DateTimeOffset.Now.Subtract(_start);
-        public TimeSpan Remaining => _start.Add(Duration).Subtract(DateTimeOffset.Now);
+        public TimeSpan Remaining => Duration.Subtract(Position);
 
         public RadioStationNowPlaying(RadioStationSchedule.Slot slot, DateTimeOffset start, TimeSpan duration)
         {
             Slot = slot;
             _start = start;
             Duration = duration;
-        }
-    }
-
-    public class RadioStationScheduleServiceBinder : Binder
-    {
-        public RadioStationScheduleService Service { get; private set; }
-
-        public RadioStationScheduleServiceBinder(RadioStationScheduleService service)
-        {
-            Service = service;
         }
     }
 }

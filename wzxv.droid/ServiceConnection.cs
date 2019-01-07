@@ -12,8 +12,16 @@ using Android.Widget;
 
 namespace wzxv
 {
-    class ServiceConnection<T> : Java.Lang.Object, IServiceConnection
-        where T : IBinder
+    static class ServiceConnectionFactory
+    {
+        public static ServiceConnection<ServiceBinder<T>, T> Create<T>(Action<T> callback)
+            where T : Service
+            => new ServiceConnection<ServiceBinder<T>, T>(callback);
+    }
+
+    class ServiceConnection<TBinder, T> : Java.Lang.Object, IServiceConnection
+        where T : Service
+        where TBinder : ServiceBinder<T>
     {
         private Action<T> _callback;
 
@@ -24,13 +32,13 @@ namespace wzxv
 
         public void OnServiceConnected(ComponentName name, IBinder service)
         {
-            if (service is T obj)
-                _callback(obj);
+            if (service is TBinder obj)
+                _callback(obj.Service);
         }
 
         public void OnServiceDisconnected(ComponentName name)
         {
-            _callback(default(T));
+            _callback(null);
         }
     }
 }

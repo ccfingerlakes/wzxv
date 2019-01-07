@@ -78,8 +78,12 @@ namespace wzxv
         {
             UpdateNetworkStatus(isConnected);
             UpdateState(isPlaying);
-            await UpdateNowPlaying(playing);
-            UpdateProgress(playing);
+
+            if (playing != null)
+            {
+                await UpdateNowPlaying(playing);
+                UpdateProgress(playing);
+            }
         }
 
         public void UpdateNetworkStatus(bool isConnected)

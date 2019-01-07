@@ -163,7 +163,7 @@ namespace wzxv
         {
             base.OnConfigurationChanged(newConfig);
             _view = new MainActivityView(this, Configure);
-            await _view.Refresh(_networkStatus.IsConnected, _service.IsPlaying, _schedule.NowPlaying);
+            await _view.Refresh(_networkStatus.IsConnected, _service?.IsPlaying == true, _schedule?.NowPlaying);
         }
 
         void OnPlayButtonClick(object sender, EventArgs e)

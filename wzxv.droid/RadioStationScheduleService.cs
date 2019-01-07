@@ -29,6 +29,14 @@ namespace wzxv
 
         public RadioStationNowPlaying NowPlaying { get; private set; }
 
+        public RadioStationScheduleService()
+            : base()
+        { }
+
+        public RadioStationScheduleService(IntPtr javaReference, JniHandleOwnership transfer)
+            : base(javaReference, transfer)
+        { }
+
         public override void OnCreate()
         {
             _timer = new Timer()

@@ -5,6 +5,7 @@ using System.Text;
 
 using Android.App;
 using Android.Content;
+using Android.Content.PM;
 using Android.OS;
 using Android.Runtime;
 using Android.Util;
@@ -20,18 +21,21 @@ namespace wzxv
 
         public static void OpenDialer(Context context, string number)
         {
-            try
-            { 
-                var intent = new Intent(Intent.ActionDial, Android.Net.Uri.Parse($"tel:{number}"));
-                context.StartActivity(intent);
-            }
-            catch (Exception ex)
+            if (context.PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
             {
-                Log.Warn(TAG, $"Could not open dialer: {ex.Message}");
-                Log.Debug(TAG, ex.ToString());
-            }
+                try
+                {
+                    var intent = new Intent(Intent.ActionDial, Android.Net.Uri.Parse($"tel:{number}"));
+                    context.StartActivity(intent);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(TAG, $"Could not open dialer: {ex.Message}");
+                    Log.Debug(TAG, ex.ToString());
+                }
 
-            Events.ExternalLink(ExternalLinkType, "dialer");
+                Events.ExternalLink(ExternalLinkType, "dialer");
+            }
         }
 
         public static void OpenMaps(Context context, double latitude, double longitude)

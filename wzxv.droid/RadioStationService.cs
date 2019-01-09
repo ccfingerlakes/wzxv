@@ -24,7 +24,7 @@ namespace wzxv
 {
     [Service]
     [IntentFilter(new [] {  ActionPlay, ActionStop })]
-    public class RadioStationService : Service
+    public class RadioStationService : Service, AudioManager.IOnAudioFocusChangeListener
     {
         public const string ExtraKeyForce = "wzxv.app.radio.FORCE";
         public const string ActionPlay = "wzxv.app.radio.PLAY";
@@ -78,7 +78,7 @@ namespace wzxv
                 }
             }   
 
-            _player = new RadioStationPlayer(this);
+            _player = new RadioStationPlayer(this, this);
             _player.StateChanged += OnPlayerStateChanged;
             _player.Error += OnPlayerError;
             _playingHandler.Post(OnPlaying);
@@ -214,6 +214,36 @@ namespace wzxv
                 StopSelf(_startId);
 
                 _startId = 0;
+            }
+        }
+
+        private float? _previousVolume = null;
+        void AudioManager.IOnAudioFocusChangeListener.OnAudioFocusChange(AudioFocus focusChange)
+        {
+            switch (focusChange)
+            {
+                case AudioFocus.Gain:
+                    Play();
+
+                    if (_previousVolume != null)
+                    {
+                        _player.Volume = _previousVolume.Value;
+                        _previousVolume = null;
+                    }
+                    break;
+
+                case AudioFocus.Loss:
+                    Stop(true);
+                    break;
+
+                case AudioFocus.LossTransient:
+                    Stop();
+                    break;
+
+                case AudioFocus.LossTransientCanDuck:
+                    _previousVolume = _player.Volume;
+                    _player.Volume = 0.1f;
+                    break;
             }
         }
 

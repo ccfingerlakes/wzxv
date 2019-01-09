@@ -26,7 +26,7 @@ namespace wzxv
         public const string TAG = "wzxv.app.main";
         public const string ActivityName = "wzxv.app.main";
 
-        private List<IServiceConnection> _connections = new List<IServiceConnection>();
+        private List<IServiceConnection> _connections;
         private NetworkStatus _networkStatus;
         private RadioStationService _service;
         private RadioStationScheduleService _schedule;
@@ -36,26 +36,18 @@ namespace wzxv
         {
             if (!string.IsNullOrEmpty(AppCenterConfig.AppSecret))
                 AppCenter.Start(AppCenterConfig.AppSecret, typeof(Analytics), typeof(Crashes));
-
+            
             base.Window.RequestFeature(Android.Views.WindowFeatures.ActionBar);
             base.SetTheme(Resource.Style.AppTheme);
             
             base.OnCreate(savedInstanceState);
 
-            SetContentView(Resource.Layout.MainActivity);
-
-            if (_view == null)
-                _view = new MainActivityView(this, Configure);
-
-            if (_networkStatus == null)
+            if (_connections == null)
             {
-                _networkStatus = new NetworkStatus(ApplicationContext, connected: OnNetworkConnected, disconnected: OnNetworkDisconnected);
-            }
+                _connections = new List<IServiceConnection>();
 
-            if (_service == null)
-            {
                 var intent = new Intent(ApplicationContext, typeof(RadioStationService));
-                var connection = ServiceConnectionFactory.Create<RadioStationService>(service =>
+                var serviceConnection = ServiceConnectionFactory.Create<RadioStationService>(service =>
                 {
                     if (service != null)
                     {
@@ -64,7 +56,7 @@ namespace wzxv
                         _service.StateChanged += OnRadioStationStateChanged;
                         _service.Error += OnRadioStationError;
                     }
-                    else if(_service != null)
+                    else if (_service != null)
                     {
                         _service.Playing -= OnRadioStationPlaying;
                         _service.StateChanged -= OnRadioStationStateChanged;
@@ -73,16 +65,13 @@ namespace wzxv
                     }
                 });
 
-                if (BindService(intent, connection, Bind.AutoCreate))
+                if (BindService(intent, serviceConnection, Bind.AutoCreate))
                 {
-                    _connections.Add(connection);
+                    _connections.Add(serviceConnection);
                 }
-            }
 
-            if (_schedule == null)
-            {
-                var intent = new Intent(ApplicationContext, typeof(RadioStationScheduleService));
-                var connection = ServiceConnectionFactory.Create<RadioStationScheduleService>(service =>
+                intent = new Intent(ApplicationContext, typeof(RadioStationScheduleService));
+                var scheduleConnection = ServiceConnectionFactory.Create<RadioStationScheduleService>(service =>
                 {
                     if (service != null)
                     {
@@ -96,45 +85,41 @@ namespace wzxv
                     }
                 });
 
-                if (BindService(intent, connection, Bind.AutoCreate))
+                if (BindService(intent, scheduleConnection, Bind.AutoCreate))
                 {
-                    _connections.Add(connection);
+                    _connections.Add(scheduleConnection);
                 }
             }
 
+            SetContentView(Resource.Layout.MainActivity);
+
+            if (_view == null)
+                _view = new MainActivityView(this).Attach(OnAttachView);
+
+            if (_networkStatus == null)
+            {
+                _networkStatus = new NetworkStatus(ApplicationContext, connected: OnNetworkConnected, disconnected: OnNetworkDisconnected);
+            }
+
             _view.UpdateNetworkStatus(_networkStatus.IsConnected);
-        }
 
-        void Configure(MainActivityView view)
-        {
-            // Now Playing
-            view.MediaButton.Click += OnPlayButtonClick;
-            view.CoverImage.Click += OnCoverImageClick;
-            // Social
-            view.WebsiteButton.Click += (_, __) => OpenBrowser("http://wzxv.org");
-            view.FacebookButton.Click += (_, __) => SocialConnector.OpenFacebook(this, "WZXVTheWord");
-            view.TwitterButton.Click += (_, __) => SocialConnector.OpenTwitter(this, "wzxvtheword");
-            view.InstagramButton.Click += (_, __) => SocialConnector.OpenInstagram(this, "wzxvtheword");
-            // Contact
-            if (PackageManager.HasSystemFeature(PackageManager.FeatureTelephony))
-                view.PhoneLink.Click += (_, __) => ContactConnector.OpenDialer(this, "15853983569");
-            view.MapButton.Click += (_, __) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);
-            view.MailLink.Click += (_, __) => ContactConnector.OpenMail(this, "manager@wzxv.org");
-        }
+            if (_service != null)
+            {
+                _view.UpdateState(_service.IsPlaying);
+            }
 
-        protected override void OnStop()
-        {
-            base.OnStop();
+            if (_schedule != null)
+            {
+                RunOnUiThread(async () => await _view.UpdateNowPlaying(_schedule.NowPlaying));
+            }
         }
 
         protected override void OnDestroy()
         {
-            if (_connections != null)
+            if (_view != null)
             {
-                foreach (var connection in _connections)
-                    UnbindService(connection);
-
-                _connections = null;
+                _view.Detach(OnDetachView);
+                _view = null;
             }
 
             if (_networkStatus != null)
@@ -143,28 +128,68 @@ namespace wzxv
                 _networkStatus = null;
             }
 
-            try
+            if (_connections != null)
             {
-                var intent = new Intent(ApplicationContext, typeof(RadioStationService)).SetAction(RadioStationService.ActionStop).PutExtra(RadioStationService.ExtraKeyForce, true);
-                StopService(intent);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(TAG, $"Failed to stop service: {ex.Message}");
-                Log.Debug(TAG, ex.ToString());
+                foreach (var connection in _connections)
+                    UnbindService(connection);
+
+                _connections = null;
             }
 
-            _view = null;
+            _service = null;
+            _schedule = null;
 
             base.OnDestroy();
         }
 
+        void OnAttachView(MainActivityView.Controls controls)
+        {
+            // Now Playing
+            controls.MediaButton.Click += OnPlayButtonClick;
+            controls.CoverImage.Click += OnCoverImageClick;
+            // Social
+            controls.WebsiteButton.Click += OnWebsiteButtonClick;
+            controls.FacebookButton.Click += OnFacebookButtonClick;
+            controls.TwitterButton.Click += OnTwitterButtonClick;
+            controls.InstagramButton.Click += OnInstagramButtonClick;
+            // Contact
+            controls.PhoneLink.Click += OnPhoneLinkClick;
+            controls.MapButton.Click += OnMapButtonClick;
+            controls.MailLink.Click += OnMailLinkClick;
+        }
+
+        void OnDetachView(MainActivityView.Controls controls)
+        {
+            // Now Playing
+            controls.MediaButton.Click -= OnPlayButtonClick;
+            controls.CoverImage.Click -= OnCoverImageClick;
+            // Social
+            controls.WebsiteButton.Click -= OnWebsiteButtonClick;
+            controls.FacebookButton.Click -= OnFacebookButtonClick;
+            controls.TwitterButton.Click -= OnTwitterButtonClick;
+            controls.InstagramButton.Click -= OnInstagramButtonClick;
+            // Contact
+            controls.PhoneLink.Click -= OnPhoneLinkClick;
+            controls.MapButton.Click -= OnMapButtonClick;
+            controls.MailLink.Click -= OnMailLinkClick;
+        }
+
         public async override void OnConfigurationChanged(Configuration newConfig)
         {
+            Log.Debug(TAG, $"{nameof(MainActivity)}::{nameof(OnConfigurationChanged)}");
             base.OnConfigurationChanged(newConfig);
-            _view = new MainActivityView(this, Configure);
+            _view.Detach(OnDetachView);
+            _view = new MainActivityView(this).Attach(OnAttachView);
             await _view.Refresh(_networkStatus.IsConnected, _service?.IsPlaying == true, _schedule?.NowPlaying);
         }
+
+        void OnWebsiteButtonClick(object sender, EventArgs e) => OpenBrowser("http://wzxv.org");
+        void OnFacebookButtonClick(object sender, EventArgs e) => SocialConnector.OpenFacebook(this, "WZXVTheWord");
+        void OnTwitterButtonClick(object sender, EventArgs e) => SocialConnector.OpenTwitter(this, "wzxvtheword");
+        void OnInstagramButtonClick(object sender, EventArgs e) => SocialConnector.OpenInstagram(this, "wzxvtheword");
+        void OnPhoneLinkClick(object sender, EventArgs e) => ContactConnector.OpenDialer(this, "15853983569");
+        void OnMapButtonClick(object sender, EventArgs e) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);
+        void OnMailLinkClick(object sender, EventArgs e) => ContactConnector.OpenMail(this, "manager@wzxv.org");
 
         void OnPlayButtonClick(object sender, EventArgs e)
         {
@@ -238,9 +263,9 @@ namespace wzxv
         {
             RunOnUiThread(() =>
             {
-                _view?.UpdateState(_service.IsPlaying);
+                _view?.UpdateState(_service?.IsPlaying == true);
 
-                if (_service.IsPlaying)
+                if (_service?.IsPlaying == true)
                 {
                     Events.Playing();
                 }
@@ -253,8 +278,9 @@ namespace wzxv
 
         void OnRadioStationError(object sender, RadioStationErrorEventArgs e)
         {
+            Log.Error(TAG, $"{nameof(MainActivity)}::{nameof(OnRadioStationError)} {e.Exception.Message ?? "See debug log for full exception detail"}");
+            Log.Debug(TAG, $"{nameof(MainActivity)}::{nameof(OnRadioStationError)} {e.Exception.ToString()}");
             Crashes.TrackError(e.Exception);
-            Events.Error(e.Exception);
             RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word is having \"issues\"... :(", ToastLength.Long).Show());
         }
     }

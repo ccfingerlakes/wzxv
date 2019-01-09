@@ -79,7 +79,7 @@ namespace wzxv
             public override void OnPause()
             {
                 var intent = new Intent(RadioStationService.ActionStop);
-                _context.StartService(intent);
+                _context.StopService(intent);
                 base.OnPause();
             }
 
@@ -93,7 +93,7 @@ namespace wzxv
             public override void OnStop()
             {
                 var intent = new Intent(RadioStationService.ActionStop);
-                _context.StartService(intent);
+                _context.StopService(intent);
                 base.OnStop();
             }
         }

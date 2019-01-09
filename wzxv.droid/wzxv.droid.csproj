@@ -73,6 +73,7 @@
     <Compile Include="Localization.cs" />
     <Compile Include="MainActivityView.cs" />
     <Compile Include="NetworkStatus.cs" />
+    <Compile Include="WzxvApplication.cs" />
     <Compile Include="RadioStationMediaSession.cs" />
     <Compile Include="RadioStationNotificationManager.cs" />
     <Compile Include="RadioStationPlayer.cs" />

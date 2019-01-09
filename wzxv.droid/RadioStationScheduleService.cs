@@ -69,6 +69,12 @@ namespace wzxv
             return new ServiceBinder<RadioStationScheduleService>(this);
         }
 
+        public override bool OnUnbind(Intent intent)
+        {
+            StopSelf();
+            return base.OnUnbind(intent);
+        }
+
         void OnRefresh(object sender, ElapsedEventArgs e)
         {
             var interval = TimeSpan.FromMinutes(1);

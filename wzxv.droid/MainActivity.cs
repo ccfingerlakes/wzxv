@@ -144,6 +144,7 @@ namespace wzxv
 
         void OnAttachView(MainActivityView.Controls controls)
         {
+            controls.Logo.LongClick += OnLogoLongClick;
             // Now Playing
             controls.MediaButton.Click += OnPlayButtonClick;
             controls.CoverImage.Click += OnCoverImageClick;
@@ -160,6 +161,7 @@ namespace wzxv
 
         void OnDetachView(MainActivityView.Controls controls)
         {
+            controls.Logo.LongClick -= OnLogoLongClick;
             // Now Playing
             controls.MediaButton.Click -= OnPlayButtonClick;
             controls.CoverImage.Click -= OnCoverImageClick;
@@ -181,6 +183,29 @@ namespace wzxv
             _view.Detach(OnDetachView);
             _view = new MainActivityView(this).Attach(OnAttachView);
             await _view.Refresh(_networkStatus.IsConnected, _service?.IsPlaying == true, _schedule?.NowPlaying);
+        }
+
+        void OnLogoLongClick(object sender, EventArgs e)
+        {
+            try
+            {
+                var versionName = PackageManager.GetPackageInfo(PackageName, 0).VersionName;
+
+                if (!string.IsNullOrEmpty(versionName))
+                {
+                    var dialog = new Android.Support.V7.App.AlertDialog.Builder(this)
+                                    .SetTitle("About")
+                                    .SetMessage($"Version {versionName}")
+                                    .SetIcon(Android.Resource.Drawable.IcDialogInfo)
+                                    .SetCancelable(true)
+                                    .Show();
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn(TAG, $"Could not get package info: {ex.Message}");
+                Log.Debug(TAG, ex.ToString());
+            }
         }
 
         void OnWebsiteButtonClick(object sender, EventArgs e) => OpenBrowser("http://wzxv.org");

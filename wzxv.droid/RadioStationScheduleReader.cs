@@ -21,6 +21,7 @@ namespace wzxv
 
         public static async Task<RadioStationSchedule> Read(string url)
         {
+            using (Events.Performance($"{nameof(RadioStationScheduleReader)}.{nameof(Read)}", new { Url = url }))
             using (var client = new HttpClient())
             {
                 try

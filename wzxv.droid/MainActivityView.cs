@@ -133,6 +133,8 @@ namespace wzxv
 
         public class Controls
         {
+            public ImageView Logo { get; private set; }
+
             // Media Controls
             public ImageView MediaButton { get; private set; }
 
@@ -156,6 +158,7 @@ namespace wzxv
 
             public Controls(MainActivity activity)
             {
+                Logo = activity.FindViewById<ImageView>(Resource.Id.logo);
                 MediaButton = activity.FindViewById<ImageView>(Resource.Id.mediaButton);
                 PhoneLink = activity.FindViewById<TextView>(Resource.Id.phoneLink);
                 MapButton = activity.FindViewById<ImageView>(Resource.Id.mapButton);

@@ -13,11 +13,12 @@ fi
 
 APPCENTERCONFIG_FILE=$APPCENTER_SOURCE_DIRECTORY/wzxv.droid/AppCenterConfig.cs
 ANDROID_MANIFEST_FILE=$APPCENTER_SOURCE_DIRECTORY/wzxv.droid/Properties/AndroidManifest.xml
+TODAY=$(date +"%Y%m%d")
 
 if [ -e "$ANDROID_MANIFEST_FILE" ]
 then
     echo "Appending AppCenter Build ID $APPCENTER_BUILD_ID to version name in AndroidManifest.xml"
-    sed -i '' 's/versionName="\([0-9.]*\)"/versionName="\1.'$APPCENTER_BUILD_ID'"/' "$ANDROID_MANIFEST_FILE"
+    sed -i '' 's/versionName="[0-9.]*"/versionName="'$TODAY'.'$APPCENTER_BUILD_ID'"/' "$ANDROID_MANIFEST_FILE"
 else
 	echo "Android manifest '$ANDROID_MANIFEST_FILE' could not be found"
 fi

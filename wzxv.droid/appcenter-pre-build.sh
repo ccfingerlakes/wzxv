@@ -17,7 +17,7 @@ TODAY=$(date +"%Y%m%d")
 
 if [ -e "$ANDROID_MANIFEST_FILE" ]
 then
-    echo "Appending AppCenter Build ID $APPCENTER_BUILD_ID to version name in AndroidManifest.xml"
+    echo "Replacing versionName with '$TODAY.$APPCENTER_BUILD_ID' in '$ANDROID_MANIFEST_FILE'"
     sed -i '' 's/versionName="[0-9.]*"/versionName="'$TODAY'.'$APPCENTER_BUILD_ID'"/' "$ANDROID_MANIFEST_FILE"
 else
 	echo "Android manifest '$ANDROID_MANIFEST_FILE' could not be found"

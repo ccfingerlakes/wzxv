@@ -11,7 +11,7 @@
 		android:src="@drawable/logo"
 		android:layout_width="match_parent"
 		android:layout_height="100dp"
-		android:layout_margin="16dp"
+		android:layout_margin="0dp"
 		android:layout_weight="0"
 		android:id="@+id/logo" />
 	<LinearLayout
@@ -26,7 +26,8 @@
 			android:layout_height="match_parent"
 			android:layout_marginLeft="4dp"
 			android:layout_marginRight="4dp"
-			android:gravity="center">
+			android:gravity="center"
+			android:clipChildren="false">
 			<ImageView
 				android:contentDescription="Now Playing"
 				android:src="@drawable/logo"

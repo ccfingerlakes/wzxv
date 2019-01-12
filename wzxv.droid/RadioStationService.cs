@@ -45,15 +45,13 @@ namespace wzxv
         private RadioStationMediaSession _mediaSession;
         private RadioStationScheduleService _schedule;
         private RadioStationServiceLock _lock;
-        private Handler _playingHandler = new Handler();
+        private Handler _playingHandler;
         
         public bool IsPlaying => _player != null && _player.IsPlaying;
 
         public override void OnCreate()
         {
             base.OnCreate();
-            _mediaSession = new RadioStationMediaSession(this);
-            _notificationManager = new RadioStationNotificationManager(this);
 
             if (_schedule == null)
             {
@@ -76,12 +74,13 @@ namespace wzxv
                 {
                     _connections.Add(connection);
                 }
-            }   
+            }
 
-            _player = new RadioStationPlayer(this, this);
-            _player.StateChanged += OnPlayerStateChanged;
-            _player.Error += OnPlayerError;
-            _playingHandler.Post(OnPlaying);
+            if (_playingHandler == null)
+            {
+                _playingHandler = new Handler();
+                _playingHandler.Post(OnPlaying);
+            }
         }
 
         public override IBinder OnBind(Intent intent)
@@ -134,6 +133,9 @@ namespace wzxv
 
         public override StartCommandResult OnStartCommand(Intent intent, StartCommandFlags flags, int startId)
         {
+            if (_notificationManager == null)
+                _notificationManager = new RadioStationNotificationManager(this);
+
             if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
             {
                 if (_startId == 0)
@@ -169,6 +171,16 @@ namespace wzxv
             {
                 try
                 {
+                    if (_mediaSession == null)
+                        _mediaSession = new RadioStationMediaSession(this);
+
+                    if (_player == null)
+                    {
+                        _player = new RadioStationPlayer(this, this);
+                        _player.StateChanged += OnPlayerStateChanged;
+                        _player.Error += OnPlayerError;
+                    }
+
                     _lock = new RadioStationServiceLock(this);
                     _player.Start();
                 }

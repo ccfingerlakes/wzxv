@@ -305,7 +305,7 @@ namespace wzxv
         {
             var playing = _schedule?.NowPlaying;
             var slot = playing?.Slot;
-
+            
             if (_mediaSession != null && slot != null)
             {
                 _mediaSession.SetMetadata(slot.Artist, slot.Title, playing.Duration, builder =>
@@ -322,11 +322,31 @@ namespace wzxv
 
             _notificationManager?.Notify(NotificationId, builder =>
             {
+                if (_mediaSession != null)
+                {
+                    var intent = new Intent(this, typeof(RadioStationService)).SetAction(RadioStationService.ActionStop);
+                    var cancelIntent = PendingIntent.GetService(this, 1, intent, PendingIntentFlags.CancelCurrent);
+                    var style = new Android.Support.V4.Media.App.NotificationCompat.MediaStyle()
+                                    .SetMediaSession(_mediaSession.SessionToken)
+                                    .SetShowCancelButton(true)
+                                    .SetCancelButtonIntent(cancelIntent);
+
+                    builder.SetStyle(style);
+                }
+
                 if (slot != null)
                 {
                     builder
                         .SetContentTitle(slot.Title)
-                        .SetContentText(slot.Artist);
+                        .SetContentText(slot.Artist)
+                        .SetContentInfo($"{Localization.Today.Add(playing.Slot.TimeOfDay).ToString("h:mm tt")} - {Localization.Today.Add(playing.Slot.TimeOfDay).Add(playing.Duration).ToString("h:mm tt")}")
+                        .SetShowWhen(false)
+                        .SetSmallIcon(Resource.Drawable.logo);
+
+                    if (playing.Cover == null)
+                        builder.SetLargeIcon(Android.Graphics.BitmapFactory.DecodeResource(Resources, Resource.Drawable.logo));
+                    else
+                        builder.SetLargeIcon(playing.Cover);
                 }
 
                 if (IsPlaying)

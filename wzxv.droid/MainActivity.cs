@@ -110,7 +110,7 @@ namespace wzxv
 
             if (_schedule != null)
             {
-                RunOnUiThread(async () => await _view.UpdateNowPlaying(_schedule.NowPlaying));
+                RunOnUiThread(() => _view.UpdateNowPlaying(_schedule.NowPlaying));
             }
         }
 
@@ -176,13 +176,13 @@ namespace wzxv
             controls.MailLink.Click -= OnMailLinkClick;
         }
 
-        public async override void OnConfigurationChanged(Configuration newConfig)
+        public override void OnConfigurationChanged(Configuration newConfig)
         {
             Log.Debug(TAG, $"{nameof(MainActivity)}::{nameof(OnConfigurationChanged)}");
             base.OnConfigurationChanged(newConfig);
             _view.Detach(OnDetachView);
             _view = new MainActivityView(this).Attach(OnAttachView);
-            await _view.Refresh(_networkStatus.IsConnected, _service?.IsPlaying == true, _schedule?.NowPlaying);
+            _view.Refresh(_networkStatus.IsConnected, _service?.IsPlaying == true, _schedule?.NowPlaying);
         }
 
         void OnLogoLongClick(object sender, EventArgs e)
@@ -281,7 +281,7 @@ namespace wzxv
 
         void OnRadioStationScheduleChanged(object sender, EventArgs e)
         {
-            RunOnUiThread(async () => await (_view?.UpdateNowPlaying(_schedule.NowPlaying) ?? Task.CompletedTask));
+            RunOnUiThread(() => _view?.UpdateNowPlaying(_schedule.NowPlaying));
         }
 
         void OnRadioStationStateChanged(object sender, EventArgs e)

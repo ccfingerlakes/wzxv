@@ -51,7 +51,7 @@ namespace wzxv
             return this;
         }
 
-        public async Task Refresh(bool isConnected, bool isPlaying, RadioStationNowPlaying playing)
+        public void Refresh(bool isConnected, bool isPlaying, RadioStationNowPlaying playing)
         {
             base.Activity.SetContentView(Resource.Layout.MainActivity);
 
@@ -62,7 +62,7 @@ namespace wzxv
 
             if (playing != null)
             {
-                await UpdateNowPlaying(playing);
+                UpdateNowPlaying(playing);
                 UpdateProgress(playing);
             }
         }
@@ -110,7 +110,7 @@ namespace wzxv
             }
         }
 
-        public async Task UpdateNowPlaying(RadioStationNowPlaying playing)
+        public void UpdateNowPlaying(RadioStationNowPlaying playing)
         {
             var slot = playing.Slot;
 
@@ -127,7 +127,11 @@ namespace wzxv
             else
             {
                 _controls.CoverImage.ContentDescription = $"Visit {slot.Artist} on the Web";
-                await _controls.CoverImage.TrySetBitmapFromUrl(slot.ImageUrl, Resource.Drawable.logo);
+
+                if (playing.Cover == null)
+                    _controls.CoverImage.SetImageResource(Resource.Drawable.logo);
+                else
+                    _controls.CoverImage.SetImageBitmap(playing.Cover);
             }
         }
 

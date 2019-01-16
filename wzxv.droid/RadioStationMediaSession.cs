@@ -20,6 +20,8 @@ namespace wzxv
         private readonly MediaSessionCompat _session;
         private readonly MediaControllerCompat _controller;
 
+        public MediaSessionCompat.Token SessionToken => _session.SessionToken;
+
         public RadioStationMediaSession(Context context)
         {
             var intent = new Intent(context, typeof(MainActivity));
@@ -28,10 +30,10 @@ namespace wzxv
 
             _session = new MediaSessionCompat(context, "wzxv.app", componentName, pendingIntent);
             _controller = new MediaControllerCompat(context, _session.SessionToken);
-            
+
+            _session.Active = true;
             _session.SetCallback(new MediaSessionCallback(context));
             _session.SetFlags(MediaSessionCompat.FlagHandlesMediaButtons | MediaSessionCompat.FlagHandlesTransportControls);
-            _session.Active = true;
         }
 
         public void Dispose()

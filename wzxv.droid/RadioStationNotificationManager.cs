@@ -41,7 +41,7 @@ namespace wzxv
             }
         }
 
-        public NotificationCompat.Builder CreateNotificationBuilder()
+        public NotificationCompat.Builder CreateNotificationBuilder(Android.Support.V4.Media.Session.MediaSessionCompat mediaSession = null)
         {
             var pendingIntent = PendingIntent.GetActivity(_context, 0, new Intent(_context, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
 

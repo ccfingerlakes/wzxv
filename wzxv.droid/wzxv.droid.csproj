@@ -68,7 +68,6 @@
     <Compile Include="AppCenterConfig.cs" />
     <Compile Include="Events.cs" />
     <Compile Include="ContactConnector.cs" />
-    <Compile Include="ControlExtensions.cs" />
     <Compile Include="CsvReader.cs" />
     <Compile Include="Localization.cs" />
     <Compile Include="MainActivityView.cs" />

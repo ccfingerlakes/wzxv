@@ -22,6 +22,8 @@ namespace wzxv
         private const string TAG = "wzxv.app.radio.schedule";
         private const string Url = "https://raw.githubusercontent.com/ccfingerlakes/wzxv/master/schedule.csv";
 
+        private static readonly HttpClient __http = new HttpClient();
+
         public event EventHandler Changed;
 
         private Timer _timer;
@@ -83,7 +85,7 @@ namespace wzxv
             {
                 if (NowPlaying?.Slot != current)
                 {
-                    NowPlaying = new RadioStationNowPlaying(current, start, duration);
+                    NowPlaying = new RadioStationNowPlaying(current, start, duration, GetCoverImage(current.ImageUrl).Result);
                     Task.Run(() => Changed?.Invoke(this, EventArgs.Empty));
                 }
             }
@@ -95,6 +97,31 @@ namespace wzxv
 
             _timer.Start();
         }
+
+        async Task<Android.Graphics.Bitmap> GetCoverImage(string url)
+        {
+            if (url != null)
+            {
+                try
+                {
+                    using (var response = await __http.GetAsync(url))
+                    {
+                        if (response.IsSuccessStatusCode)
+                        {
+                            using (var stream = await response.Content.ReadAsStreamAsync())
+                                return Android.Graphics.BitmapFactory.DecodeStream(stream);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(TAG, $"Could not load image from url '{url}': {ex.Message}");
+                    Log.Debug(TAG, ex.ToString());
+                }
+            }
+
+            return null;
+        }
     }
 
     public class RadioStationNowPlaying
@@ -105,12 +132,14 @@ namespace wzxv
         public TimeSpan Duration { get; private set; }
         public TimeSpan Position => DateTimeOffset.Now.Subtract(_start);
         public TimeSpan Remaining => Duration.Subtract(Position);
+        public Android.Graphics.Bitmap Cover { get; private set; }
 
-        public RadioStationNowPlaying(RadioStationSchedule.Slot slot, DateTimeOffset start, TimeSpan duration)
+        public RadioStationNowPlaying(RadioStationSchedule.Slot slot, DateTimeOffset start, TimeSpan duration, Android.Graphics.Bitmap cover)
         {
             Slot = slot;
             _start = start;
             Duration = duration;
+            Cover = cover;
         }
     }
 }

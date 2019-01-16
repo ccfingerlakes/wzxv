@@ -78,21 +78,30 @@ namespace wzxv
 
             public override void OnPause()
             {
-                var intent = new Intent(RadioStationService.ActionStop);
+                var intent = new Intent(_context, typeof(RadioStationService)).SetAction(RadioStationService.ActionStop);
                 _context.StopService(intent);
                 base.OnPause();
             }
 
             public override void OnPlay()
             {
-                var intent = new Intent(RadioStationService.ActionPlay);
-                _context.StartService(intent);
+                var intent = new Intent(_context, typeof(RadioStationService)).SetAction(RadioStationService.ActionPlay);
+
+                if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+                {
+                    _context.StartForegroundService(intent);
+                }
+                else
+                {
+                    _context.StartService(intent);
+                }
+
                 base.OnPlay();
             }
 
             public override void OnStop()
             {
-                var intent = new Intent(RadioStationService.ActionStop);
+                var intent = new Intent(_context, typeof(RadioStationService)).SetAction(RadioStationService.ActionStop);
                 _context.StopService(intent);
                 base.OnStop();
             }

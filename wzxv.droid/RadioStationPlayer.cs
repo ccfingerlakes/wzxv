@@ -28,6 +28,7 @@ namespace wzxv
         private readonly Context _context;
         private readonly AudioManager _audioManager;
         private readonly AudioManager.IOnAudioFocusChangeListener _onAudioFocusChangeListener;
+        private AudioFocusRequestClass _audioFocusRequest;
         private Handler _handler;
         private SimpleExoPlayer _player;
 
@@ -113,7 +114,7 @@ namespace wzxv
             {
                 if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
                 {
-                    var audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
+                    _audioFocusRequest = new AudioFocusRequestClass.Builder(AudioFocus.Gain)
                                                         .SetOnAudioFocusChangeListener(_onAudioFocusChangeListener)
                                                         .SetAudioAttributes(new AudioAttributes.Builder()
                                                             .SetUsage(AudioUsageKind.Media)
@@ -121,7 +122,7 @@ namespace wzxv
                                                             .Build())
                                                         .Build();
 
-                    return _audioManager.RequestAudioFocus(audioFocusRequest) == AudioFocusRequest.Granted;
+                    return _audioManager.RequestAudioFocus(_audioFocusRequest) == AudioFocusRequest.Granted;
                 }
 
                 #pragma warning disable CS0618 // Type or member is obsolete
@@ -144,6 +145,18 @@ namespace wzxv
                             _player.RemoveListener(_listener);
                             _player.Release();
                             StateChanged?.Invoke(this, EventArgs.Empty);
+                        }
+
+                        if (_audioFocusRequest != null)
+                        {
+                            _audioManager.AbandonAudioFocusRequest(_audioFocusRequest);
+                            _audioFocusRequest = null;
+                        }
+                        else
+                        {
+                            #pragma warning disable CS0618 // Type or member is obsolete
+                            _audioManager.AbandonAudioFocus(_onAudioFocusChangeListener);
+                            #pragma warning restore CS0618 // Type or member is obsolete
                         }
                     }
                     catch (Exception ex)

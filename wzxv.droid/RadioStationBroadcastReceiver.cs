@@ -45,8 +45,23 @@ namespace wzxv
 
                     if (action != null)
                     {
-                        var remoteIntent = new Intent(action);
-                        context.StartService(remoteIntent);
+                        var remoteIntent = new Intent(context, typeof(RadioStationService)).SetAction(action);
+
+                        if (action == RadioStationService.ActionStop)
+                        {
+                            context.StopService(remoteIntent);
+                        }
+                        else
+                        {
+                            if (Build.VERSION.SdkInt >= BuildVersionCodes.O)
+                            {
+                                context.StartForegroundService(remoteIntent);
+                            }
+                            else
+                            {
+                                context.StartService(remoteIntent);
+                            }
+                        }
                     }
                 }
             }

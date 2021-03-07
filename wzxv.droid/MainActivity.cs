@@ -4,7 +4,6 @@ using Android.Content.PM;
 using Android.Graphics;
 using Android.Media;
 using Android.OS;
-using Android.Support.V7.App;
 using Android.Widget;
 using System;
 using System.Net.Http;
@@ -14,9 +13,9 @@ using Microsoft.AppCenter.Analytics;
 using Microsoft.AppCenter.Crashes;
 using System.Collections.Generic;
 using Android.Util;
-using Android.Arch.Lifecycle;
 using Android.Content.Res;
 using System.Threading.Tasks;
+using AndroidX.AppCompat.App;
 
 namespace wzxv
 {
@@ -31,15 +30,15 @@ namespace wzxv
         private RadioStationService _service;
         private RadioStationScheduleService _schedule;
         private MainActivityView _view;
-        
+
         protected override void OnCreate(Bundle savedInstanceState)
         {
             if (!string.IsNullOrEmpty(AppCenterConfig.AppSecret))
                 AppCenter.Start(AppCenterConfig.AppSecret, typeof(Analytics), typeof(Crashes));
-            
+
             base.Window.RequestFeature(Android.Views.WindowFeatures.ActionBar);
             base.SetTheme(Resource.Style.AppTheme);
-            
+
             base.OnCreate(savedInstanceState);
 
             if (_connections == null)
@@ -142,7 +141,7 @@ namespace wzxv
             base.OnDestroy();
         }
 
-        void OnAttachView(MainActivityView.Controls controls)
+        private void OnAttachView(MainActivityView.Controls controls)
         {
             controls.Logo.LongClick += OnLogoLongClick;
             // Now Playing
@@ -159,7 +158,7 @@ namespace wzxv
             controls.MailLink.Click += OnMailLinkClick;
         }
 
-        void OnDetachView(MainActivityView.Controls controls)
+        private void OnDetachView(MainActivityView.Controls controls)
         {
             controls.Logo.LongClick -= OnLogoLongClick;
             // Now Playing
@@ -185,7 +184,7 @@ namespace wzxv
             _view.Refresh(_networkStatus.IsConnected, _service?.IsPlaying == true, _schedule?.NowPlaying);
         }
 
-        void OnLogoLongClick(object sender, EventArgs e)
+        private void OnLogoLongClick(object sender, EventArgs e)
         {
             try
             {
@@ -193,7 +192,7 @@ namespace wzxv
 
                 if (!string.IsNullOrEmpty(versionName))
                 {
-                    var dialog = new Android.Support.V7.App.AlertDialog.Builder(this)
+                    var dialog = new AndroidX.AppCompat.App.AlertDialog.Builder(this)
                                     .SetTitle("About")
                                     .SetMessage($"Version {versionName}")
                                     .SetIcon(Android.Resource.Drawable.IcDialogInfo)
@@ -208,18 +207,24 @@ namespace wzxv
             }
         }
 
-        void OnWebsiteButtonClick(object sender, EventArgs e) => OpenBrowser("http://wzxv.org");
-        void OnFacebookButtonClick(object sender, EventArgs e) => SocialConnector.OpenFacebook(this, "WZXVTheWord");
-        void OnTwitterButtonClick(object sender, EventArgs e) => SocialConnector.OpenTwitter(this, "wzxvtheword");
-        void OnInstagramButtonClick(object sender, EventArgs e) => SocialConnector.OpenInstagram(this, "wzxvtheword");
-        void OnPhoneLinkClick(object sender, EventArgs e) => ContactConnector.OpenDialer(this, "15853983569");
-        void OnMapButtonClick(object sender, EventArgs e) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);
-        void OnMailLinkClick(object sender, EventArgs e) => ContactConnector.OpenMail(this, "manager@wzxv.org");
+        private void OnWebsiteButtonClick(object sender, EventArgs e) => OpenBrowser("http://wzxv.org");
 
-        void OnPlayButtonClick(object sender, EventArgs e)
+        private void OnFacebookButtonClick(object sender, EventArgs e) => SocialConnector.OpenFacebook(this, "WZXVTheWord");
+
+        private void OnTwitterButtonClick(object sender, EventArgs e) => SocialConnector.OpenTwitter(this, "wzxvtheword");
+
+        private void OnInstagramButtonClick(object sender, EventArgs e) => SocialConnector.OpenInstagram(this, "wzxvtheword");
+
+        private void OnPhoneLinkClick(object sender, EventArgs e) => ContactConnector.OpenDialer(this, "15853983569");
+
+        private void OnMapButtonClick(object sender, EventArgs e) => ContactConnector.OpenMaps(this, 42.9465473, -77.3333895);
+
+        private void OnMailLinkClick(object sender, EventArgs e) => ContactConnector.OpenMail(this, "manager@wzxv.org");
+
+        private void OnPlayButtonClick(object sender, EventArgs e)
         {
             Events.Click("Media Button", new { _service.IsPlaying });
-            
+
             if (_service.IsPlaying)
             {
                 _service.Stop();
@@ -239,7 +244,7 @@ namespace wzxv
             }
         }
 
-        void OnCoverImageClick(object sender, EventArgs e)
+        private void OnCoverImageClick(object sender, EventArgs e)
         {
             var url = _schedule?.NowPlaying?.Slot?.Url;
 
@@ -252,12 +257,12 @@ namespace wzxv
             }
         }
 
-        void OnNetworkConnected()
+        private void OnNetworkConnected()
         {
             RunOnUiThread(() => _view?.UpdateNetworkStatus(true));
         }
 
-        void OnNetworkDisconnected()
+        private void OnNetworkDisconnected()
         {
             if (_service != null && _service.IsPlaying)
             {
@@ -267,24 +272,24 @@ namespace wzxv
             RunOnUiThread(() => _view?.UpdateNetworkStatus(false));
         }
 
-        void OpenBrowser(string url)
+        private void OpenBrowser(string url)
         {
             var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(url));
             StartActivity(intent);
             Events.ExternalLink("Browser", url);
         }
 
-        void OnRadioStationPlaying(object sender, EventArgs e)
+        private void OnRadioStationPlaying(object sender, EventArgs e)
         {
             RunOnUiThread(() => _view?.UpdateProgress(_schedule.NowPlaying));
         }
 
-        void OnRadioStationScheduleChanged(object sender, EventArgs e)
+        private void OnRadioStationScheduleChanged(object sender, EventArgs e)
         {
             RunOnUiThread(() => _view?.UpdateNowPlaying(_schedule.NowPlaying));
         }
 
-        void OnRadioStationStateChanged(object sender, EventArgs e)
+        private void OnRadioStationStateChanged(object sender, EventArgs e)
         {
             RunOnUiThread(() =>
             {
@@ -301,10 +306,10 @@ namespace wzxv
             });
         }
 
-        void OnRadioStationError(object sender, RadioStationErrorEventArgs e)
+        private void OnRadioStationError(object sender, RadioStationErrorEventArgs e)
         {
             Log.Error(TAG, $"{nameof(MainActivity)}::{nameof(OnRadioStationError)} {e.Exception.Message ?? "See debug log for full exception detail"}");
-            Log.Debug(TAG, $"{nameof(MainActivity)}::{nameof(OnRadioStationError)} {e.Exception.ToString()}");
+            Log.Debug(TAG, $"{nameof(MainActivity)}::{nameof(OnRadioStationError)} {e.Exception}");
             Crashes.TrackError(e.Exception);
             RunOnUiThread(() => Toast.MakeText(this, "The stream for WZXV - The Word is having \"issues\"... :(", ToastLength.Long).Show());
         }

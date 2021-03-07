@@ -13,18 +13,19 @@ using Android.Widget;
 
 namespace wzxv
 {
-    static class SocialConnector
+    internal static class SocialConnector
     {
         private const string TAG = "wzxv.app.social.connector";
         private const string ExternalLinkType = "Social";
 
         public static void OpenFacebook(Context context, string id)
         {
-            string uri = null;
+            string uri;
 
             try
             {
-                var versionCode = context.PackageManager.GetPackageInfo("com.facebook.katana", 0).VersionCode;
+                var package = context.PackageManager.GetPackageInfo("com.facebook.katana", 0);
+                var versionCode = AndroidX.Core.Content.PM.PackageInfoCompat.GetLongVersionCode(package);
 
                 if (versionCode >= 3002850)
                 {

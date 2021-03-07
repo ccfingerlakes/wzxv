@@ -126,16 +126,15 @@
 				android:src="@drawable/wzxv"
 				android:layout_width="48dp"
 				android:layout_height="48dp"
-				android:layout_weight="0"
 				android:padding="4dp"
 				android:layout_margin="4dp"
 				android:id="@+id/websiteButton" />
 			<ImageView
+				android:visibility="gone"
 				android:contentDescription="Visit WZXV on Facebook"
 				android:src="@drawable/facebook"
 				android:layout_width="48dp"
 				android:layout_height="48dp"
-				android:layout_weight="0"
 				android:padding="4dp"
 				android:layout_margin="4dp"
 				android:id="@+id/facebookButton" />
@@ -144,16 +143,15 @@
 				android:src="@drawable/twitter"
 				android:layout_width="48dp"
 				android:layout_height="48dp"
-				android:layout_weight="0"
 				android:padding="4dp"
 				android:layout_margin="4dp"
 				android:id="@+id/twitterButton" />
 			<ImageView
+				android:visibility="gone"
 				android:contentDescription="Visit WZXV on Instagram"
 				android:src="@drawable/instagram"
 				android:layout_width="48dp"
 				android:layout_height="48dp"
-				android:layout_weight="0"
 				android:padding="4dp"
 				android:layout_margin="4dp"
 				android:id="@+id/instagramButton" />
@@ -174,7 +172,6 @@
 				android:gravity="left|center"
 				android:layout_width="120dp"
 				android:layout_height="fill_parent"
-				android:layout_weight="0"
 				android:paddingLeft="8dp"
 				android:textColor="@color/tooltip_background_light"
 				android:autoSizeTextType="uniform"
@@ -193,7 +190,6 @@
 				android:layout_width="48dp"
 				android:layout_height="48dp"
 				android:padding="4dp"
-				android:layout_weight="1"
 				android:id="@+id/mapButton" />
 			<TextView
 				android:text="manager@wzxv.org"
@@ -201,7 +197,6 @@
 				android:gravity="right|center"
 				android:layout_width="120dp"
 				android:layout_height="fill_parent"
-				android:layout_weight="0"
 				android:paddingRight="8dp"
 				android:textColor="@color/tooltip_background_light"
 				android:autoSizeTextType="uniform"

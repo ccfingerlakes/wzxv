@@ -13,7 +13,7 @@ using Android.Widget;
 
 namespace wzxv
 {
-    class ActivityView<TActivity>
+    internal class ActivityView<TActivity>
         where TActivity : Activity
     {
         protected ActivityView(TActivity activity)
@@ -22,7 +22,7 @@ namespace wzxv
         protected TActivity Activity { get; private set; }
     }
 
-    class MainActivityView : ActivityView<MainActivity>
+    internal class MainActivityView : ActivityView<MainActivity>
     {
         public const string TAG = "wzxv.app.main.view";
 
@@ -34,7 +34,7 @@ namespace wzxv
             activity.SetContentView(Resource.Layout.MainActivity);
 
             _controls = new Controls(activity);
-            
+
             _controls.ScheduleTimeRange.Text = string.Empty;
             _controls.PlayingProgress.Progress = 0;
         }
@@ -56,7 +56,7 @@ namespace wzxv
             base.Activity.SetContentView(Resource.Layout.MainActivity);
 
             _controls = new Controls(base.Activity);
-            
+
             UpdateNetworkStatus(isConnected);
             UpdateState(isPlaying);
 
@@ -86,14 +86,14 @@ namespace wzxv
         {
             _controls.PlayingProgress.Progress = 0;
             _controls.PlayingProgress.Max = 100;
-            
+
             if (playing.Duration.TotalMinutes > 0)
                 _controls.PlayingProgress.Progress = (int)Math.Ceiling((playing.Position.TotalSeconds / playing.Duration.TotalSeconds) * 100);
 
             if (playing.Remaining.TotalMinutes >= 1)
-                _controls.PlayingProgress.ContentDescription = $"{Math.Ceiling(playing.Remaining.TotalMinutes).ToString("#0")} minutes remaining";
+                _controls.PlayingProgress.ContentDescription = $"{Math.Ceiling(playing.Remaining.TotalMinutes):#0} minutes remaining";
             else
-                _controls.PlayingProgress.ContentDescription = $"{Math.Ceiling(playing.Remaining.TotalSeconds).ToString("#0")} seconds remaining";
+                _controls.PlayingProgress.ContentDescription = $"{Math.Ceiling(playing.Remaining.TotalSeconds):#0} seconds remaining";
         }
 
         public void UpdateState(bool isPlaying)
@@ -116,7 +116,7 @@ namespace wzxv
 
             _controls.ArtistLabel.Text = slot.Artist;
             _controls.TitleLabel.Text = slot.Title;
-            _controls.ScheduleTimeRange.Text = $"{Localization.Today.Add(playing.Slot.TimeOfDay).ToString("h:mm tt")} - {Localization.Today.Add(playing.Slot.TimeOfDay).Add(playing.Duration).ToString("h:mm tt")}";
+            _controls.ScheduleTimeRange.Text = $"{Localization.Today.Add(playing.Slot.TimeOfDay):h:mm tt} - {Localization.Today.Add(playing.Slot.TimeOfDay).Add(playing.Duration):h:mm tt}";
             _controls.CoverImage.SetImageResource(Resource.Drawable.logo);
 
             if (slot.ImageUrl == null)
@@ -144,17 +144,20 @@ namespace wzxv
 
             // Contact Controls
             public TextView PhoneLink { get; private set; }
+
             public ImageView MapButton { get; private set; }
             public TextView MailLink { get; private set; }
 
             // Social Buttons
             public ImageView WebsiteButton { get; private set; }
+
             public ImageView FacebookButton { get; private set; }
             public ImageView TwitterButton { get; private set; }
             public ImageView InstagramButton { get; private set; }
 
             // Now Playing
             public ImageView CoverImage { get; private set; }
+
             public TextView ArtistLabel { get; private set; }
             public TextView TitleLabel { get; private set; }
             public TextView ScheduleTimeRange { get; private set; }

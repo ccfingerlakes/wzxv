@@ -16,10 +16,11 @@ using Com.Google.Android.Exoplayer2.Source;
 using Com.Google.Android.Exoplayer2.Trackselection;
 using Com.Google.Android.Exoplayer2.Upstream;
 using Com.Google.Android.Exoplayer2.Util;
+using Log = Android.Util.Log;
 
 namespace wzxv
 {
-    class RadioStationPlayer : IDisposable
+    internal class RadioStationPlayer : IDisposable
     {
         private const string TAG = "wzxv.app.radio.player";
         private const string StreamUrl = "http://ic2.christiannetcast.com/wzxv-fm";
@@ -42,9 +43,11 @@ namespace wzxv
         }
 
         public event EventHandler StateChanged;
+
         public event EventHandler<RadioStationErrorEventArgs> Error;
 
-        public bool IsPlaying { get;  private set; }
+        public bool IsPlaying { get; private set; }
+
         public float Volume
         {
             get => _player?.Volume ?? 0;
@@ -79,11 +82,14 @@ namespace wzxv
                 {
                     try
                     {
-                        var defaultBandwidthMeter = new DefaultBandwidthMeter();
-                        var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory(defaultBandwidthMeter);
-                        var defaultTrackSelector = new DefaultTrackSelector(adaptiveTrackSelectionFactory);
+                        var defaultBandwidthMeter = new DefaultBandwidthMeter.Builder(_context).Build();
+                        var adaptiveTrackSelectionFactory = new AdaptiveTrackSelection.Factory();
+                        var defaultTrackSelector = new DefaultTrackSelector(_context, adaptiveTrackSelectionFactory);
 
-                        _player = ExoPlayerFactory.NewSimpleInstance(_context, defaultTrackSelector);
+                        _player = new SimpleExoPlayer.Builder(_context)
+                                    .SetBandwidthMeter(defaultBandwidthMeter)
+                                    .SetTrackSelector(defaultTrackSelector)
+                                    .Build();
                         _player.AddListener(_listener);
                         _player.PlayWhenReady = true;
 
@@ -93,7 +99,7 @@ namespace wzxv
                             var userAgent = Util.GetUserAgent(_context, "wzxv.app.radio.player");
                             var defaultHttpDataSourceFactory = new DefaultHttpDataSourceFactory(userAgent);
                             var defaultDataSourceFactory = new DefaultDataSourceFactory(_context, null, defaultHttpDataSourceFactory);
-                            var mediaSourceFactory = new ExtractorMediaSource.Factory(defaultDataSourceFactory);
+                            var mediaSourceFactory = new ProgressiveMediaSource.Factory(defaultDataSourceFactory);
                             var mediaSource = mediaSourceFactory.CreateMediaSource(mediaUri);
 
                             _player.Prepare(mediaSource);
@@ -125,9 +131,9 @@ namespace wzxv
                     return _audioManager.RequestAudioFocus(_audioFocusRequest) == AudioFocusRequest.Granted;
                 }
 
-                #pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable CS0618 // Type or member is obsolete
                 return _audioManager.RequestAudioFocus(_onAudioFocusChangeListener, Stream.Music, AudioFocus.Gain) == AudioFocusRequest.Granted;
-                #pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore CS0618 // Type or member is obsolete
             }
         }
 
@@ -154,9 +160,9 @@ namespace wzxv
                         }
                         else
                         {
-                            #pragma warning disable CS0618 // Type or member is obsolete
+#pragma warning disable CS0618 // Type or member is obsolete
                             _audioManager.AbandonAudioFocus(_onAudioFocusChangeListener);
-                            #pragma warning restore CS0618 // Type or member is obsolete
+#pragma warning restore CS0618 // Type or member is obsolete
                         }
                     }
                     catch (Exception ex)
@@ -172,24 +178,24 @@ namespace wzxv
             }
         }
 
-        void OnPlayerError(ExoPlaybackException e)
+        private void OnPlayerError(ExoPlaybackException e)
         {
             Log.Error(TAG, $"Player error occurred, see debug log for full details");
             Log.Debug(TAG, e.ToString());
             Error?.Invoke(this, new RadioStationErrorEventArgs(e));
         }
 
-        void OnPlayerStateChanged(bool playWhenReady, int playbackState)
+        private void OnPlayerStateChanged(int playbackState)
         {
             switch (playbackState)
             {
-                case Player.StateBuffering:
-                case Player.StateReady:
+                case IPlayer.StateBuffering:
+                case IPlayer.StateReady:
                     IsPlaying = _player.PlayWhenReady;
                     break;
 
-                case Player.StateIdle:
-                case Player.StateEnded:
+                case IPlayer.StateIdle:
+                case IPlayer.StateEnded:
                     IsPlaying = false;
                     break;
             }
@@ -210,16 +216,47 @@ namespace wzxv
                 => _player.OnPlayerError(e);
 
             void IPlayerEventListener.OnPlayerStateChanged(bool playWhenReady, int playbackState)
-                => _player.OnPlayerStateChanged(playWhenReady, playbackState);
+                => _player.OnPlayerStateChanged(playbackState);
 
-            void IPlayerEventListener.OnLoadingChanged(bool isLoading) { }
-            void IPlayerEventListener.OnPlaybackParametersChanged(PlaybackParameters playbackParameters) { }
-            void IPlayerEventListener.OnPositionDiscontinuity(int reason) { }
-            void IPlayerEventListener.OnRepeatModeChanged(int reason) { }
-            void IPlayerEventListener.OnSeekProcessed() { }
-            void IPlayerEventListener.OnShuffleModeEnabledChanged(bool reason) { }
-            void IPlayerEventListener.OnTimelineChanged(Timeline timeline, Java.Lang.Object manifest, int reason) { }
-            void IPlayerEventListener.OnTracksChanged(TrackGroupArray ignored, TrackSelectionArray trackSelections) { }
+            void IPlayerEventListener.OnLoadingChanged(bool isLoading)
+            {
+            }
+
+            void IPlayerEventListener.OnPlaybackParametersChanged(PlaybackParameters playbackParameters)
+            {
+            }
+
+            void IPlayerEventListener.OnPositionDiscontinuity(int reason)
+            {
+            }
+
+            void IPlayerEventListener.OnRepeatModeChanged(int reason)
+            {
+            }
+
+            void IPlayerEventListener.OnSeekProcessed()
+            {
+            }
+
+            void IPlayerEventListener.OnShuffleModeEnabledChanged(bool reason)
+            {
+            }
+
+            void IPlayerEventListener.OnTimelineChanged(Timeline timeline, int reason)
+            {
+            }
+
+            void IPlayerEventListener.OnTracksChanged(TrackGroupArray ignored, TrackSelectionArray trackSelections)
+            {
+            }
+
+            void IPlayerEventListener.OnIsPlayingChanged(bool isPlaying)
+            {
+            }
+
+            void IPlayerEventListener.OnPlaybackSuppressionReasonChanged(int playbackSuppressionReason)
+            {
+            }
         }
     }
 

@@ -19,11 +19,12 @@ using Com.Google.Android.Exoplayer2.Source;
 using Com.Google.Android.Exoplayer2.Trackselection;
 using Com.Google.Android.Exoplayer2.Upstream;
 using Com.Google.Android.Exoplayer2.Util;
+using Log = Android.Util.Log;
 
 namespace wzxv
 {
     [Service]
-    [IntentFilter(new [] {  ActionPlay, ActionStop })]
+    [IntentFilter(new[] { ActionPlay, ActionStop })]
     public class RadioStationService : Service, AudioManager.IOnAudioFocusChangeListener
     {
         public const string ExtraKeyForce = "wzxv.app.radio.FORCE";
@@ -35,7 +36,9 @@ namespace wzxv
         private const int NotificationId = 1;
 
         public event EventHandler Playing;
+
         public event EventHandler StateChanged;
+
         public event EventHandler<RadioStationErrorEventArgs> Error;
 
         private int _startId;
@@ -46,7 +49,7 @@ namespace wzxv
         private RadioStationScheduleService _schedule;
         private RadioStationServiceLock _lock;
         private Handler _playingHandler;
-        
+
         public bool IsPlaying => _player != null && _player.IsPlaying;
 
         public override void OnCreate()
@@ -165,7 +168,7 @@ namespace wzxv
             return StartCommandResult.Sticky;
         }
 
-        void Play()
+        private void Play()
         {
             if (!IsPlaying)
             {
@@ -230,6 +233,7 @@ namespace wzxv
         }
 
         private float? _previousVolume = null;
+
         void AudioManager.IOnAudioFocusChangeListener.OnAudioFocusChange(AudioFocus focusChange)
         {
             switch (focusChange)
@@ -259,7 +263,7 @@ namespace wzxv
             }
         }
 
-        void OnPlaying()
+        private void OnPlaying()
         {
             if (_playingHandler != null)
             {
@@ -270,7 +274,7 @@ namespace wzxv
             }
         }
 
-        void OnPlayerStateChanged(object sender, EventArgs e)
+        private void OnPlayerStateChanged(object sender, EventArgs e)
         {
             if (_mediaSession != null)
             {
@@ -289,23 +293,23 @@ namespace wzxv
             StateChanged?.Invoke(this, e);
         }
 
-        void OnPlayerError(object sender, RadioStationErrorEventArgs e)
+        private void OnPlayerError(object sender, RadioStationErrorEventArgs e)
         {
             _mediaSession?.SetPlaybackState(PlaybackStateCompat.StateError);
             Stop();
             Error?.Invoke(this, e);
         }
 
-        void OnScheduleChanged(object sender, EventArgs e)
+        private void OnScheduleChanged(object sender, EventArgs e)
         {
             UpdateNotification();
         }
 
-        void UpdateNotification()
+        private void UpdateNotification()
         {
             var playing = _schedule?.NowPlaying;
             var slot = playing?.Slot;
-            
+
             if (_mediaSession != null && slot != null)
             {
                 _mediaSession.SetMetadata(slot.Artist, slot.Title, playing.Duration, builder =>
@@ -326,7 +330,8 @@ namespace wzxv
                 {
                     var intent = new Intent(this, typeof(RadioStationService)).SetAction(RadioStationService.ActionStop);
                     var cancelIntent = PendingIntent.GetService(this, 1, intent, PendingIntentFlags.CancelCurrent);
-                    var style = new Android.Support.V4.Media.App.NotificationCompat.MediaStyle()
+
+                    var style = new AndroidX.Media.App.NotificationCompat.MediaStyle()
                                     .SetMediaSession(_mediaSession.SessionToken)
                                     .SetShowCancelButton(true)
                                     .SetCancelButtonIntent(cancelIntent);
@@ -339,7 +344,7 @@ namespace wzxv
                     builder
                         .SetContentTitle(slot.Title)
                         .SetContentText(slot.Artist)
-                        .SetContentInfo($"{Localization.Today.Add(playing.Slot.TimeOfDay).ToString("h:mm tt")} - {Localization.Today.Add(playing.Slot.TimeOfDay).Add(playing.Duration).ToString("h:mm tt")}")
+                        .SetContentInfo($"{Localization.Today.Add(playing.Slot.TimeOfDay):h:mm tt} - {Localization.Today.Add(playing.Slot.TimeOfDay).Add(playing.Duration):h:mm tt}")
                         .SetShowWhen(false)
                         .SetSmallIcon(Resource.Drawable.logo);
 

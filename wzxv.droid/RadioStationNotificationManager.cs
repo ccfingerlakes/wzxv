@@ -10,10 +10,11 @@ using Android.Runtime;
 using Android.Support.V4.App;
 using Android.Views;
 using Android.Widget;
+using AndroidX.Core.App;
 
 namespace wzxv
 {
-    class RadioStationNotificationManager
+    internal class RadioStationNotificationManager
     {
         private const string ChannelId = "wzxv.app.PLAYBACK";
         private readonly Context _context;
@@ -41,11 +42,11 @@ namespace wzxv
             }
         }
 
-        public NotificationCompat.Builder CreateNotificationBuilder(Android.Support.V4.Media.Session.MediaSessionCompat mediaSession = null)
+        public NotificationCompat.Builder CreateNotificationBuilder()
         {
             var pendingIntent = PendingIntent.GetActivity(_context, 0, new Intent(_context, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
 
-            var builder = new NotificationCompat.Builder(_context)
+            var builder = new NotificationCompat.Builder(_context, ChannelId)
                 .SetSmallIcon(Resource.Drawable.headset)
                 .SetContentIntent(pendingIntent)
                 .SetOngoing(true)
@@ -80,10 +81,7 @@ namespace wzxv
         public void Notify(int notificationId, Action<NotificationCompat.Builder> builder = null)
         {
             var notification = CreateNotificationBuilder();
-            if (builder != null)
-            {
-                builder(notification);
-            }
+            builder?.Invoke(notification);
             _manager.Notify(notificationId, notification.Build());
         }
 

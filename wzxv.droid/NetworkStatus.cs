@@ -10,73 +10,53 @@ using Android.OS;
 using Android.Runtime;
 using Android.Views;
 using Android.Widget;
+using static Android.Net.ConnectivityManager;
 
 namespace wzxv
 {
-    class NetworkStatus : IDisposable
+    internal class NetworkStatus : NetworkCallback, IDisposable
     {
-        private readonly Context _context;
         private readonly ConnectivityManager _manager;
-        private NetworkStatusBroadcastReceiver _receiver;
 
         public event EventHandler<EventArgs> Connected;
+
         public event EventHandler<EventArgs> Disconnected;
 
-        public bool IsConnected => _manager.ActiveNetworkInfo?.IsConnected == true;
+        public bool IsConnected => _manager.GetNetworkCapabilities(_manager.ActiveNetwork).HasTransport(TransportType.Wifi);
 
         public NetworkStatus(Context context, Action connected = null, Action disconnected = null)
         {
-            _context = context;
             _manager = (ConnectivityManager)context.GetSystemService(Context.ConnectivityService);
 
             if (connected != null)
                 Connected += (_, __) => connected();
             if (disconnected != null)
                 Disconnected += (_, __) => disconnected();
-            
-            _receiver = new NetworkStatusBroadcastReceiver(OnNetworkStatusChanged);
-            _context.RegisterReceiver(_receiver, new IntentFilter(ConnectivityManager.ConnectivityAction));
+
+            var request = new NetworkRequest.Builder()
+                .AddTransportType(TransportType.Cellular)
+                .AddTransportType(TransportType.Wifi)
+                .Build();
+
+            _manager.RegisterNetworkCallback(request, this);
         }
 
-        public void Dispose()
+        void IDisposable.Dispose()
         {
-            if (_receiver != null)
+            if (_manager != null)
             {
-                _context.UnregisterReceiver(_receiver);
-                _receiver = null;
+                _manager.UnregisterNetworkCallback(this);
             }
         }
 
-        void OnNetworkStatusChanged()
+        public override void OnAvailable(Network network)
         {
-            if (IsConnected)
-            {
-                Connected?.Invoke(this, EventArgs.Empty);
-            }
-            else
-            {
-                Disconnected?.Invoke(this, EventArgs.Empty);
-            }
-        }
-    }
-
-    [BroadcastReceiver()]
-    [IntentFilter(new string[] { ConnectivityManager.ConnectivityAction })]
-    public class NetworkStatusBroadcastReceiver : BroadcastReceiver
-    {
-        private readonly Action _callback;
-
-        public NetworkStatusBroadcastReceiver()
-        { }
-
-        public NetworkStatusBroadcastReceiver(Action callback)
-        {
-            _callback = callback;
+            Connected?.Invoke(this, EventArgs.Empty);
         }
 
-        public override void OnReceive(Context context, Intent intent)
+        public override void OnUnavailable()
         {
-            _callback?.Invoke();
+            Disconnected?.Invoke(this, EventArgs.Empty);
         }
     }
 }

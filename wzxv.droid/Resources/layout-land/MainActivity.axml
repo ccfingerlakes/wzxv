@@ -133,6 +133,7 @@
 				android:layout_margin="4dp"
 				android:id="@+id/websiteButton" />
 			<ImageView
+				android:visibility="gone"
 				android:contentDescription="Visit WZXV on Facebook"
 				android:src="@drawable/facebook"
 				android:layout_width="48dp"
@@ -151,6 +152,7 @@
 				android:layout_margin="4dp"
 				android:id="@+id/twitterButton" />
 			<ImageView
+				android:visibility="gone"
 				android:contentDescription="Visit WZXV on Instagram"
 				android:src="@drawable/instagram"
 				android:layout_width="48dp"

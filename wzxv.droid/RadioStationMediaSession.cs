@@ -6,6 +6,7 @@ using System.Text;
 using Android.App;
 using Android.Content;
 using Android.Media;
+using Android.Media.Session;
 using Android.OS;
 using Android.Runtime;
 using Android.Support.V4.Media;
@@ -15,10 +16,9 @@ using Android.Widget;
 
 namespace wzxv
 {
-    class RadioStationMediaSession : IDisposable
+    internal class RadioStationMediaSession : IDisposable
     {
         private readonly MediaSessionCompat _session;
-        private readonly MediaControllerCompat _controller;
 
         public MediaSessionCompat.Token SessionToken => _session.SessionToken;
 
@@ -28,12 +28,12 @@ namespace wzxv
             var pendingIntent = PendingIntent.GetActivity(context, 0, intent, 0);
             var componentName = new ComponentName(context.PackageName, new RadioStationBroadcastReceiver().ComponentName);
 
-            _session = new MediaSessionCompat(context, "wzxv.app", componentName, pendingIntent);
-            _controller = new MediaControllerCompat(context, _session.SessionToken);
-
-            _session.Active = true;
+            _session = new MediaSessionCompat(context, "wzxv.app", componentName, pendingIntent)
+            {
+                Active = true
+            };
             _session.SetCallback(new MediaSessionCallback(context));
-            _session.SetFlags(MediaSessionCompat.FlagHandlesMediaButtons | MediaSessionCompat.FlagHandlesTransportControls);
+            _session.SetFlags((int)(MediaSessionFlags.HandlesMediaButtons | MediaSessionFlags.HandlesTransportControls));
         }
 
         public void Dispose()
@@ -69,7 +69,7 @@ namespace wzxv
             return this;
         }
 
-        class MediaSessionCallback : MediaSessionCompat.Callback
+        private class MediaSessionCallback : MediaSessionCompat.Callback
         {
             private readonly Context _context;
 
